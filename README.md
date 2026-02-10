@@ -1,6 +1,6 @@
 # AI Voice Platform
 
-A comprehensive multi-tenant SaaS platform that enables businesses (doctors, restaurants, service providers) to handle customer calls using AI voice agents with memory and contextual understanding.
+A comprehensive multi-tenant SaaS platform that enables businesses (doctors, restaurants, service providers) to handle customer calls using AI voice agents with memory and contextual understanding. Built specifically for the Indian market with native language support.
 
 ## Overview
 
@@ -10,7 +10,9 @@ This platform combines a robust **Express.js backend** with **Vocode voice AI** 
 - Maintain conversation memory across interactions  
 - Extract structured data (appointments, orders, symptoms)
 - Operate with tenant-specific knowledge and personas
-- Handle Indian telephony via Exotel integration
+- Handle Indian telephony via **Exotel** integration
+- Support **22 Indian languages** via **Sarvam AI**
+- Achieve **~₹1-2 per call** infrastructure cost
 
 ## Architecture
 
@@ -29,9 +31,11 @@ This platform combines a robust **Express.js backend** with **Vocode voice AI** 
 └──────────────────────────────────────────────────────────────────────────────┘
 
 External Services:
+├── Exotel (Indian Telephony)
+├── Sarvam AI (Indian STT/TTS - 22 languages)
 ├── Deepgram (Speech-to-Text)
 ├── ElevenLabs / Google TTS (Text-to-Speech)
-├── OpenAI GPT-4 (LLM)
+├── OpenAI GPT-4 / Groq (LLM)
 └── Redis (Session Cache)
 ```
 
@@ -65,22 +69,58 @@ External Services:
 │   │   └── generate-token.util.ts    # JWT token generation
 │   └── constants/                    # App constants
 │       └── messages.ts               # Response messages
-├── vocode-core/                      # Vocode Voice AI Library
-│   ├── vocode/                       # Core library
-│   │   ├── streaming/                # Real-time conversations
-│   │   │   ├── agent/                # LLM agents (GPT, Claude)
-│   │   │   ├── transcriber/          # STT engines (Deepgram)
-│   │   │   ├── synthesizer/          # TTS engines (ElevenLabs)
-│   │   │   ├── telephony/            # Phone integrations
-│   │   │   ├── action/               # Agent actions
+│
+├── vocode-core/                      # Vocode Voice AI Library (Enhanced)
+│   ├── vocode/
+│   │   ├── streaming/
+│   │   │   ├── agent/                # LLM Agents
+│   │   │   │   ├── chat_gpt_agent.py
+│   │   │   │   ├── anthropic_agent.py
+│   │   │   │   ├── groq_agent.py     # Fast inference
+│   │   │   │   └── langchain_agent.py
+│   │   │   │
+│   │   │   ├── transcriber/          # STT Engines
+│   │   │   │   ├── deepgram_transcriber.py
+│   │   │   │   ├── sarvam_transcriber.py    # Indian languages
+│   │   │   │   ├── assembly_ai_transcriber.py
+│   │   │   │   └── azure_transcriber.py
+│   │   │   │
+│   │   │   ├── synthesizer/          # TTS Engines
+│   │   │   │   ├── eleven_labs_synthesizer.py
+│   │   │   │   ├── sarvam_synthesizer.py    # Indian languages
+│   │   │   │   ├── azure_synthesizer.py
+│   │   │   │   └── google_synthesizer.py
+│   │   │   │
+│   │   │   ├── telephony/            # Telephony Providers
+│   │   │   │   ├── client/
+│   │   │   │   │   ├── exotel_client.py     # Indian telephony
+│   │   │   │   │   ├── plivo_client.py      # Cloud telephony
+│   │   │   │   │   ├── twilio_client.py
+│   │   │   │   │   └── vonage_client.py
+│   │   │   │   │
+│   │   │   │   ├── server/
+│   │   │   │   │   ├── exotel_routes.py     # Exotel webhooks
+│   │   │   │   │   ├── plivo_routes.py      # Plivo webhooks
+│   │   │   │   │   └── base.py
+│   │   │   │   │
+│   │   │   │   └── conversation/     # Phone conversations
+│   │   │   │
+│   │   │   ├── action/               # Agent Actions
+│   │   │   │   ├── end_conversation.py
+│   │   │   │   ├── transfer_call.py
+│   │   │   │   └── dtmf.py
+│   │   │   │
 │   │   │   └── models/               # Configuration models
+│   │   │
 │   │   └── turn_based/               # Sequential conversations
+│   │
 │   ├── apps/                         # Sample applications
 │   ├── tests/                        # Test suite
 │   └── quickstarts/                  # Getting started examples
+│
 ├── docs/
 │   └── VOICE_PLATFORM_SPEC.md        # Detailed product specification
-├── prisma/                           # Database schema (if exists)
+├── prisma/                           # Database schema
 ├── package.json                      # Node.js dependencies
 └── README.md                         # This file
 ```
@@ -93,15 +133,7 @@ External Services:
 - **Secure login** with bcrypt password hashing
 - **Protected routes** via auth middleware
 - **Role-based access control** (RBAC)
-
-```typescript
-// JWT payload structure
-{
-  userId: string;
-  role: string;
-  dealerId: string;
-}
-```
+- JWT payload includes: `userId`, `role`, `dealerId`
 
 ### 2. API Endpoints
 
@@ -110,6 +142,7 @@ External Services:
 GET    /api/users/              - Health check
 POST   /api/users/register      - User registration
 POST   /api/users/login         - User login
+GET    /heartbeat               - Service health check
 ```
 
 #### Protected Endpoints
@@ -127,6 +160,7 @@ All incoming requests are validated using **Zod schemas**:
 - **Helmet** - Security headers
 - **Rate limiting** - Prevent abuse
 - **CORS** - Cross-origin configuration
+- **Host whitelist** - URL-based access control
 - **JWT secret** - Minimum 32 characters required
 - **Environment validation** - All env vars validated at startup
 
@@ -155,46 +189,115 @@ The server handles shutdown signals properly:
 - **Prettier** - Code formatting
 - **Husky** - Pre-commit hooks
 
+### 9. Logging
+- **Pino** - High-performance logging
+- **Request logging** middleware
+- **Structured logging** with JSON format
+
 ## Voice AI Features (Vocode)
 
-### Real-Time Streaming
-- **WebSocket-based** bidirectional audio streaming
-- **Low-latency** conversation handling
-- **Continuous listening** and response generation
+### Custom Indian Additions
 
-### Supported Integrations
+#### 1. Sarvam AI Integration 🇮🇳
+**Real-time STT (Speech-to-Text)**
+- WebSocket-based streaming
+- 22 Indian languages supported:
+  - Hindi (hi-IN), Bengali (bn-IN), Tamil (ta-IN), Telugu (te-IN)
+  - Kannada (kn-IN), Malayalam (ml-IN), Marathi (mr-IN), Gujarati (gu-IN)
+  - Punjabi (pa-IN), Odia (or-IN), Indian English (en-IN)
+  - And more...
+- **Code-mixing support** - Switch languages mid-sentence
+- Auto language detection
+- Optimized for 8kHz/16kHz telephony audio
+- **Pricing: ₹30/hour (₹0.50/minute)**
+
+**TTS (Text-to-Speech)**
+- REST API-based synthesis
+- Indian accent voices
+- Optimized for Indian languages
+- Base64 audio response
+
+**Files:**
+- `vocode/streaming/transcriber/sarvam_transcriber.py`
+- `vocode/streaming/synthesizer/sarvam_synthesizer.py`
+- `vocode/streaming/models/transcriber.py` (SarvamTranscriberConfig)
+- `vocode/streaming/models/synthesizer.py` (SarvamSynthesizerConfig)
+
+#### 2. Exotel Integration 🇮🇳
+**Indian Cloud Telephony**
+- Native Exotel Connect API support
+- Voicebot Applet for WebSocket streaming
+- Outbound call creation
+- Call termination
+- Webhook handling for inbound calls
+- Audio format: base64 encoded 16-bit, 8kHz mono PCM
+
+**Files:**
+- `vocode/streaming/telephony/client/exotel_client.py`
+- `vocode/streaming/telephony/server/exotel_routes.py`
+- `vocode/streaming/models/telephony.py` (ExotelConfig)
+
+#### 3. Plivo Integration
+**Cloud Telephony**
+- Plivo Voice API support
+- XML-based call control
+- Audio streaming via `<Stream>` element
+- Bidirectional WebSocket support
+- Webhook routes for answer/hangup/status
+
+**Files:**
+- `vocode/streaming/telephony/client/plivo_client.py`
+- `vocode/streaming/telephony/server/plivo_routes.py`
+
+#### 4. Groq Agent
+**Fast LLM Inference**
+- Groq API integration for ultra-low latency
+- Mixtral, Llama models
+- Compatible with OpenAI-style API
+- Streaming response support
+- **Ideal for real-time voice conversations**
+
+**Files:**
+- `vocode/streaming/agent/groq_agent.py`
+- `vocode/streaming/models/agent.py` (GroqAgentConfig)
+
+### Standard Integrations
 
 #### Speech-to-Text (STT)
-- Deepgram (Primary)
-- AssemblyAI
-- Azure Speech
-- Google Cloud Speech
-- Whisper
-- Gladia
+- **Deepgram** (Primary) - Real-time streaming
+- **Sarvam AI** - Indian languages
+- **AssemblyAI** - High accuracy
+- **Azure Speech** - Microsoft cloud
+- **Google Cloud Speech** - Google cloud
+- **Whisper** - OpenAI
+- **Gladia** - Word-level timestamps
 
 #### Text-to-Speech (TTS)
-- ElevenLabs (Primary)
-- Azure TTS
-- Google Cloud TTS
-- Cartesia
-- Play.ht
-- Coqui (Open source)
-- Bark (Open source)
+- **ElevenLabs** (Primary) - High quality voices
+- **Sarvam AI** - Indian languages
+- **Azure TTS** - Microsoft cloud
+- **Google Cloud TTS** - Google cloud
+- **Cartesia** - Sonic voices
+- **Play.ht** - Voice cloning
+- **Coqui** - Open source
+- **Bark** - Open source
+- **Rime** - Fast synthesis
 
 #### Language Models
-- OpenAI GPT-4 / GPT-4o-mini
-- Anthropic Claude
-- Groq (Fast inference)
-- LangChain integration
+- **OpenAI GPT-4 / GPT-4o-mini**
+- **Anthropic Claude**
+- **Groq** - Fast inference
+- **LangChain** - Agent framework
+- **Vertex AI** - Google models
 
 #### Telephony
-- **Exotel** (Indian telephony - custom integration)
-- Twilio
-- Vonage
-- Plivo
+- **Exotel** - Indian provider (Custom)
+- **Plivo** - Cloud communications (Custom)
+- **Twilio** - Global leader
+- **Vonage** - Enterprise
 
 ### Conversation Memory
-- **Short-term memory** (Redis) - Current call context
+- **Short-term memory** (Redis) - Current call context, last 5 turns
 - **Long-term memory** (PostgreSQL) - Full transcripts, caller profiles
 - **Semantic memory** (Vector DB) - Knowledge bases for RAG
 
@@ -218,7 +321,8 @@ The server handles shutdown signals properly:
 - PostgreSQL 14+
 - Redis (optional, for caching)
 - Python 3.9+ (for Vocode)
-- Exotel account (for telephony)
+- Exotel account (for Indian telephony)
+- Sarvam AI account (for Indian languages)
 
 ### Installation
 
@@ -255,15 +359,20 @@ JWT_SECRET=your-super-secret-jwt-key-min-32-chars
 # CORS
 WHITE_LIST_URLS=http://localhost:3000,http://localhost:5173
 
-# Exotel (Telephony)
+# Exotel (Indian Telephony)
 EXOTEL_ACCOUNT_SID=your_exotel_sid
 EXOTEL_API_KEY=your_exotel_key
 EXOTEL_API_TOKEN=your_exotel_token
+EXOTEL_SUBDOMAIN=api
+
+# Sarvam AI (Indian STT/TTS)
+SARVAM_API_KEY=your_sarvam_key
 
 # Voice AI
 DEEPGRAM_API_KEY=your_deepgram_key
 ELEVENLABS_API_KEY=your_elevenlabs_key
 OPENAI_API_KEY=your_openai_key
+GROQ_API_KEY=your_groq_key
 
 # Vocode Service
 VOCODE_BASE_URL=http://localhost:3001
@@ -290,11 +399,12 @@ npm start
 1. **Install Vocode dependencies**
 ```bash
 cd vocode-core
-pip install -e .
+pip install -e ".[groq]"  # Include Groq support
 ```
 
 2. **Run a quickstart example**
 ```bash
+# With Sarvam AI (Indian languages)
 python quickstarts/streaming_conversation.py
 ```
 
@@ -321,25 +431,105 @@ curl -X POST http://localhost:5000/api/users/login \
   }'
 ```
 
-Response:
-```json
-{
-  "success": true,
-  "data": {
-    "token": "eyJhbGciOiJIUzI1NiIs...",
-    "user": {
-      "id": "user-id",
-      "email": "user@example.com",
-      "name": "John Doe"
-    }
-  }
-}
-```
-
 ### Get Profile (Protected)
 ```bash
 curl -X GET http://localhost:5000/api/users/profile \
   -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIs..."
+```
+
+## Using Custom Integrations
+
+### Sarvam AI (Indian Languages)
+
+```python
+from vocode.streaming.models.transcriber import SarvamTranscriberConfig
+from vocode.streaming.models.synthesizer import SarvamSynthesizerConfig
+from vocode.streaming.transcriber.sarvam_transcriber import SarvamTranscriber
+from vocode.streaming.synthesizer.sarvam_synthesizer import SarvamSynthesizer
+
+# STT with Hindi
+transcriber = SarvamTranscriber(
+    SarvamTranscriberConfig(
+        api_key=os.getenv("SARVAM_API_KEY"),
+        language="hi-IN",  # Hindi
+        sampling_rate=16000,
+    )
+)
+
+# TTS with Indian English
+synthesizer = SarvamSynthesizer(
+    SarvamSynthesizerConfig(
+        api_key=os.getenv("SARVAM_API_KEY"),
+        language="en-IN",  # Indian English
+    )
+)
+```
+
+### Exotel (Indian Telephony)
+
+```python
+from vocode.streaming.telephony.client.exotel_client import ExotelClient
+from vocode.streaming.models.telephony import ExotelConfig
+
+# Configure Exotel
+exotel_config = ExotelConfig(
+    account_sid="your_account_sid",
+    api_key="your_api_key",
+    api_token="your_api_token",
+    subdomain="api",
+)
+
+# Create client
+exotel_client = ExotelClient(
+    base_url="your-domain.com",
+    maybe_exotel_config=exotel_config,
+)
+
+# Create outbound call
+call_sid = await exotel_client.create_call(
+    conversation_id="conv-123",
+    to_phone="+919876543210",
+    from_phone="+918888888888",
+)
+
+# End call
+await exotel_client.end_call(call_sid)
+```
+
+### Groq (Fast Inference)
+
+```python
+from vocode.streaming.agent.groq_agent import GroqAgent
+from vocode.streaming.models.agent import GroqAgentConfig
+
+# Fast inference with Groq
+agent = GroqAgent(
+    GroqAgentConfig(
+        groq_api_key=os.getenv("GROQ_API_KEY"),
+        model="mixtral-8x7b-32768",
+        initial_message=BaseMessage(text="Hello!"),
+        prompt_preamble="You are a helpful assistant.",
+    )
+)
+```
+
+### Plivo
+
+```python
+from vocode.streaming.telephony.client.plivo_client import PlivoClient
+from vocode.streaming.models.telephony import PlivoConfig
+
+# Configure Plivo
+plivo_config = PlivoConfig(
+    auth_id="your_auth_id",
+    auth_token="your_auth_token",
+)
+
+# Create client
+plivo_client = PlivoClient(
+    base_url="your-domain.com",
+    maybe_plivo_config=plivo_config,
+)
 ```
 
 ## Development
@@ -398,6 +588,53 @@ npm run test -- --coverage
 npm run test -- src/features/user/__tests__/user.controller.spec.ts
 ```
 
+## Cost Analysis (India-Focused)
+
+**Target: ₹2 per call total infrastructure cost**
+
+| Component | Provider | Cost Strategy | Est. Cost/Call |
+|-----------|----------|---------------|----------------|
+| **Telephony** | Exotel | Pay-per-minute | ₹0.50 - 1.00 |
+| **Vocode** | Self-hosted | FREE | ₹0.00 |
+| **STT** | Sarvam AI | ₹0.50/minute | ₹0.30 - 0.50 |
+| **LLM** | Groq / OpenAI | Token-based | ₹0.20 - 0.40 |
+| **TTS** | Sarvam AI / Google | Low cost | ₹0.00 - 0.10 |
+| **Server** | Self-hosted/VPS | Amortized | Minimal |
+| **TOTAL** | | | **~₹1.00 - 2.00** |
+
+**Why These Choices?**
+- **Sarvam AI**: Optimized for Indian languages at low cost
+- **Exotel**: Native Indian telephony with local numbers
+- **Groq**: Ultra-fast inference for real-time conversations
+- **Self-hosted Vocode**: No per-call licensing fees
+
+## Use Cases
+
+### Healthcare / Doctors
+- Appointment booking
+- Symptom intake in local languages
+- Prescription refills
+- Follow-up reminders
+
+### Restaurants
+- Order taking in Hindi/English
+- Table reservations
+- Menu inquiries
+- Delivery tracking
+
+### Service Businesses
+- Lead capture
+- Appointment scheduling
+- Quote generation
+- Service inquiries
+
+## Documentation
+
+- **Product Specification**: See `docs/VOICE_PLATFORM_SPEC.md`
+- **Vocode Docs**: [docs.vocode.dev](https://docs.vocode.dev/open-source)
+- **Sarvam AI Docs**: [docs.sarvam.ai](https://docs.sarvam.ai)
+- **Exotel Docs**: [developer.exotel.com](https://developer.exotel.com)
+
 ## Deployment
 
 ### Production Checklist
@@ -407,6 +644,7 @@ npm run test -- src/features/user/__tests__/user.controller.spec.ts
 - [ ] Set up PostgreSQL with SSL
 - [ ] Configure Redis for session storage
 - [ ] Set up Exotel webhooks
+- [ ] Set up Sarvam AI API keys
 - [ ] Enable rate limiting
 - [ ] Configure logging (Pino)
 - [ ] Set up monitoring (health checks)
@@ -430,46 +668,6 @@ docker build -t voice-platform .
 docker run -p 5000:5000 --env-file .env voice-platform
 ```
 
-## Cost Analysis (India-Focused)
-
-**Target: ₹2 per call total infrastructure cost**
-
-| Component | Cost Strategy | Est. Cost/Call |
-|-----------|---------------|----------------|
-| **Exotel** | Pay-per-minute telephony | ₹0.50 - 1.00 |
-| **Vocode** | Self-hosted (FREE) | ₹0.00 |
-| **Deepgram STT** | Pay-per-second | ₹0.30 - 0.50 |
-| **OpenAI GPT-4o-mini** | Token-based | ₹0.20 - 0.40 |
-| **TTS (Google)** | Free tier or ₹0.10/call | ₹0.00 - 0.10 |
-| **Server** | Self-hosted/VPS | Amortized |
-| **TOTAL** | | **~₹1.00 - 2.00** |
-
-## Use Cases
-
-### Healthcare / Doctors
-- Appointment booking
-- Symptom intake
-- Prescription refills
-- Follow-up reminders
-
-### Restaurants
-- Order taking
-- Table reservations
-- Menu inquiries
-- Delivery tracking
-
-### Service Businesses
-- Lead capture
-- Appointment scheduling
-- Quote generation
-- Service inquiries
-
-## Documentation
-
-- **Product Specification**: See `docs/VOICE_PLATFORM_SPEC.md`
-- **Vocode Docs**: [docs.vocode.dev](https://docs.vocode.dev/open-source)
-- **API Documentation**: Available at `/api-docs` (when configured)
-
 ## Contributing
 
 1. Fork the repository
@@ -492,3 +690,5 @@ For issues and questions:
 ---
 
 **Built with:** Node.js, Express, TypeScript, Prisma, PostgreSQL, Vocode, and ❤️
+
+**Made for India:** Sarvam AI, Exotel integration for local languages and telephony
