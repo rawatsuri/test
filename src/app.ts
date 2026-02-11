@@ -1,9 +1,12 @@
+import { clerkMiddleware } from '@clerk/express';
 import cors from 'cors';
 import express, { Application, Request, Response } from 'express';
 import helmet from 'helmet';
 
-import { env } from './config/env-config';
+import authRoutes from './features/auth/routes/auth.routes';
+import testRoutes from './features/test/routes/test.routes';
 import { apiErrorHandler, unmatchedRoutes } from './middleware/api-error.middleware';
+import { attachUserContext } from './middleware/clerk-auth.middleware';
 import { pinoLogger, loggerMiddleware } from './middleware/pino-logger';
 import { hostWhitelist, rateLimiter } from './middleware/security.middleware';
 
@@ -18,6 +21,9 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true })); // For webhook form data
 app.use(cors());
 
+// Clerk Authentication Middleware (attaches auth to request)
+app.use(clerkMiddleware());
+
 // Logging
 app.use(loggerMiddleware);
 app.use(pinoLogger);
@@ -29,9 +35,16 @@ app.get('/heartbeat', (req: Request, res: Response): void => {
   return;
 });
 
-// ─── API Routes (added as feature modules are built) ───
-// app.use('/v1/tenants', tenantRoutes);
-// app.use('/v1/admin', superAdminRoutes);
+// ─── Public Routes ───
+app.use('/v1/auth', authRoutes);
+
+// ─── Testing Routes (development only) ───
+app.use('/test', testRoutes);
+
+// ─── API Routes (protected by Clerk auth) ───
+app.use(attachUserContext);
+// app.use('/v1/tenants', requireApiAuth, tenantRoutes);
+// app.use('/v1/admin', requireApiAuth, superAdminRoutes);
 
 // ─── Webhook Routes (no auth — verified by signature) ───
 // app.use('/webhooks', webhookRoutes);
