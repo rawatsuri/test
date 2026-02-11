@@ -31,7 +31,8 @@ External Services:
 ├── Deepgram (Speech-to-Text)
 ├── ElevenLabs / Google TTS (Text-to-Speech)
 ├── OpenAI GPT-4 / Groq (LLM)
-└── Redis (Session Cache)
+├── Clerk (Authentication)
+└── Supabase (PostgreSQL + pgvector)
 ```
 
 ---
@@ -88,8 +89,8 @@ enum Plan {
 
 model User {
   id        String   @id @default(uuid())
+  clerkId   String   @unique // Clerk user ID
   email     String
-  password  String   // Hashed with bcrypt
   name      String?
   role      UserRole @default(MEMBER)
   tenantId  String
@@ -309,7 +310,7 @@ model KnowledgeItem {
   title     String
   content   String   @db.Text
   category  String?
-  embedding Float[]? @db.Real[] // For pgvector (future)
+  embedding Unsupported("vector")? // pgvector for semantic search
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -345,7 +346,9 @@ model WebhookLog {
 
 #### Tasks:
 
-**1.1 Update Prisma Schema**
+**1.1 Setup Supabase & Prisma**
+- [ ] Create Supabase project
+- [ ] Enable pgvector extension: `CREATE EXTENSION IF NOT EXISTS vector;`
 - [ ] Update `prisma/schema.prisma` with new AgentConfig fields
 - [ ] Add WebhookLog model
 - [ ] Run migration: `npx prisma migrate dev --name add_agent_config_providers`
@@ -363,7 +366,19 @@ export class EncryptionService {
 }
 ```
 
-**1.3 Tenant Module**
+**1.3 Clerk Authentication Setup**
+- [ ] Install Clerk SDK: `npm install @clerk/clerk-sdk-node`
+- [ ] Create `src/middleware/clerk-auth.middleware.ts`
+- [ ] Configure Clerk webhook for user sync
+- [ ] Add Clerk session middleware to app
+
+**APIs:**
+```
+POST   /v1/auth/webhook/clerk       → Handle Clerk user events
+GET    /v1/auth/me                  → Get current user (Clerk)
+```
+
+**1.4 Tenant Module**
 - [ ] Create `src/features/tenant/`
 - [ ] Tenant controller (CRUD)
 - [ ] Tenant service
@@ -810,6 +825,43 @@ PUT    /v1/admin/tenants/:id/status
 PUT    /v1/admin/tenants/:id/plan
 ```
 
+### Testing APIs (No Validation)
+For rapid testing without Clerk authentication or validation:
+```
+# Tenant Testing
+POST   /test/tenants                    → Create tenant (no auth)
+GET    /test/tenants                    → List all tenants
+DELETE /test/tenants/:id                → Delete tenant
+
+# User Testing  
+POST   /test/tenants/:id/users          → Add user (no auth)
+GET    /test/tenants/:id/users          → List users
+
+# Agent Config Testing
+POST   /test/tenants/:id/agent-config   → Set config (no validation)
+GET    /test/tenants/:id/agent-config   → Get config
+
+# Phone Number Testing
+POST   /test/tenants/:id/phone-numbers  → Add number
+
+# Caller Testing
+POST   /test/tenants/:id/callers        → Create caller
+GET    /test/tenants/:id/callers        → List callers
+
+# Call Testing
+POST   /test/calls                      → Create test call
+POST   /test/calls/:id/transcript       → Add transcript (no validation)
+POST   /test/calls/:id/extraction       → Add extraction (no validation)
+PUT    /test/calls/:id/status           → Update call status
+
+# Webhook Testing
+POST   /test/webhooks/exotel            → Simulate Exotel webhook
+POST   /test/webhooks/plivo             → Simulate Plivo webhook
+
+# Database Testing
+DELETE /test/db/reset                   → Reset all test data
+```
+
 ---
 
 ## Environment Variables
@@ -820,13 +872,14 @@ NODE_ENV=development
 PORT=5000
 LOG_LEVEL=debug
 
-# Database
-DATABASE_URL=postgresql://user:password@localhost:5432/voiceplatform
-SHADOW_DATABASE_URL=postgresql://user:password@localhost:5432/voiceplatform_shadow
+# Database (Supabase)
+DATABASE_URL=postgresql://postgres:[password]@[host]:5432/postgres?pgbouncer=true
+DIRECT_URL=postgresql://postgres:[password]@[host]:5432/postgres
 
-# JWT
-JWT_SECRET=your-super-secret-jwt-key-min-32-chars
-JWT_EXPIRES_IN=1h
+# Clerk Authentication
+CLERK_SECRET_KEY=sk_test_...
+CLERK_PUBLISHABLE_KEY=pk_test_...
+CLERK_WEBHOOK_SECRET=whsec_...
 
 # CORS
 WHITE_LIST_URLS=http://localhost:3000,http://localhost:5173
@@ -834,7 +887,7 @@ WHITE_LIST_URLS=http://localhost:3000,http://localhost:5173
 # Encryption
 MASTER_ENCRYPTION_KEY=your-32-char-encryption-key
 
-# Redis
+# Redis (optional - for caching)
 REDIS_URL=redis://localhost:6379
 
 # Exotel
@@ -905,7 +958,7 @@ src/
 │   │   └── plivo/
 │   └── admin/
 ├── middleware/
-│   ├── auth.middleware.ts
+│   ├── clerk-auth.middleware.ts
 │   ├── webhook-auth.middleware.ts
 │   ├── validation.middleware.ts
 │   ├── security.middleware.ts
