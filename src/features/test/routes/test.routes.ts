@@ -3,11 +3,13 @@ import { Request, Response } from 'express';
 import { Router } from 'express';
 
 import tenantTestRoutes from './test-tenant.routes';
+import userTestRoutes from './test-user.routes';
 
 const router = Router();
 
-// Mount tenant test routes
+// Mount test routes
 router.use('/', tenantTestRoutes);
+router.use('/', userTestRoutes);
 
 /**
  * Testing routes - No validation, for development only
