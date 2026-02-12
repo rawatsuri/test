@@ -36,6 +36,7 @@ export const envSchema = z.object({
 
   // Vocode Server
   VOCODE_BASE_URL: z.string().url().default('http://localhost:3001'),
+  VOCODE_API_KEY: z.string().optional(),
 
   // Exotel (Indian telephony)
   EXOTEL_ACCOUNT_SID: z.string().optional(),
