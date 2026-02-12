@@ -66,9 +66,17 @@ export class ContextService {
         return { success: false, error: 'Agent config not found' };
       }
 
-      // Get previous calls for context
-      const previousCalls = await this.callRepository.findByTenant(tenantId, {
-        limit: 5,
+      // Get previous calls with extractions for context
+      const previousCalls = await this.prisma.call.findMany({
+        where: {
+          tenantId,
+          callerId,
+        },
+        take: 5,
+        orderBy: { startedAt: 'desc' },
+        include: {
+          extractions: true,
+        },
       });
 
       // Extract structured data from previous calls
@@ -76,7 +84,7 @@ export class ContextService {
       const previousOrders: any[] = [];
 
       for (const call of previousCalls) {
-        if (call.extractions) {
+        if (call.extractions && call.extractions.length > 0) {
           for (const extraction of call.extractions) {
             if (extraction.type === 'appointment') {
               previousAppointments.push(extraction.data);
