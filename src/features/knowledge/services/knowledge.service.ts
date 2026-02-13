@@ -1,4 +1,4 @@
-import { KnowledgeItem, PrismaClient } from '@prisma/client';
+import { KnowledgeItem, Prisma, PrismaClient } from '@prisma/client';
 
 import { PrismaService } from '../../../config/prisma.config';
 import { CreateKnowledgeItemInput, UpdateKnowledgeItemInput } from '../schemas/knowledge.schema';
@@ -89,6 +89,13 @@ export class KnowledgeService {
     data: UpdateKnowledgeItemInput,
   ): Promise<{ success: boolean; data?: KnowledgeItem; error?: string }> {
     try {
+      const existing = await this.prisma.knowledgeItem.findFirst({
+        where: { id, tenantId },
+      });
+      if (!existing) {
+        return { success: false, error: 'Knowledge item not found' };
+      }
+
       const item = await this.prisma.knowledgeItem.update({
         where: { id },
         data: {
@@ -107,6 +114,13 @@ export class KnowledgeService {
 
   async delete(id: string, tenantId: string): Promise<{ success: boolean; error?: string }> {
     try {
+      const existing = await this.prisma.knowledgeItem.findFirst({
+        where: { id, tenantId },
+      });
+      if (!existing) {
+        return { success: false, error: 'Knowledge item not found' };
+      }
+
       await this.prisma.knowledgeItem.delete({
         where: { id },
       });
@@ -128,19 +142,45 @@ export class KnowledgeService {
     limit: number = 5,
   ): Promise<{ success: boolean; data?: KnowledgeItem[]; error?: string }> {
     try {
-      // For now, use basic text search
-      // TODO: Implement vector similarity search when embeddings are available
+      // Full-text ranking with ILIKE fallback in one query.
+      const rows = await this.prisma.$queryRaw<
+        Array<{ id: string }>
+      >(Prisma.sql`
+        SELECT k.id
+        FROM "KnowledgeItem" k
+        WHERE k."tenantId" = ${tenantId}
+          AND (
+            to_tsvector('simple', COALESCE(k.title, '') || ' ' || COALESCE(k.content, ''))
+            @@ plainto_tsquery('simple', ${query})
+            OR k.title ILIKE ${`%${query}%`}
+            OR k.content ILIKE ${`%${query}%`}
+          )
+        ORDER BY
+          ts_rank(
+            to_tsvector('simple', COALESCE(k.title, '') || ' ' || COALESCE(k.content, '')),
+            plainto_tsquery('simple', ${query})
+          ) DESC,
+          k."updatedAt" DESC
+        LIMIT ${limit};
+      `);
+
+      const ids = rows.map(row => row.id);
+      if (ids.length === 0) {
+        return { success: true, data: [] };
+      }
+
       const items = await this.prisma.knowledgeItem.findMany({
         where: {
           tenantId,
-          OR: [
-            { title: { contains: query, mode: 'insensitive' } },
-            { content: { contains: query, mode: 'insensitive' } },
-          ],
+          id: { in: ids },
         },
-        take: limit,
-        orderBy: { updatedAt: 'desc' },
       });
+
+      const orderIndex = new Map(ids.map((id, index) => [id, index]));
+      items.sort(
+        (a: KnowledgeItem, b: KnowledgeItem) =>
+          (orderIndex.get(a.id) ?? 0) - (orderIndex.get(b.id) ?? 0),
+      );
 
       return { success: true, data: items };
     } catch (error) {

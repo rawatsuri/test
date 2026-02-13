@@ -1,6 +1,8 @@
 import { Request, Response } from 'express';
 
 import { PrismaService } from '../../../config/prisma.config';
+import { contextService } from '../../../services/context.service';
+import { vocodeService } from '../../../services/vocode.service';
 import { CallerRepository } from '../../callers/repositories/caller.repository';
 import { CallRepository } from '../../calls/repositories/call.repository';
 
@@ -60,12 +62,53 @@ export class PlivoWebhookController {
         callerId: caller.id,
         direction: Direction === 'inbound' ? 'INBOUND' : 'OUTBOUND',
         status: 'RINGING',
+        provider: 'PLIVO',
       });
+
+      const contextResult = await contextService.buildCallContext(tenantId, caller.id);
+      if (!contextResult.success || !contextResult.context) {
+        res.status(500).json({
+          success: false,
+          message: contextResult.error || 'Failed to build caller context',
+        });
+        return;
+      }
+
+      const vocodeResult = await vocodeService.createConversation({
+        callId: call.id,
+        tenantId,
+        systemPrompt: contextResult.context.systemPrompt,
+        voiceId: contextResult.context.voiceId,
+        language: contextResult.context.language,
+        sttProvider: contextResult.context.sttProvider,
+        ttsProvider: contextResult.context.ttsProvider,
+        llmProvider: contextResult.context.llmProvider,
+        sttApiKey: contextResult.context.sttApiKey,
+        ttsApiKey: contextResult.context.ttsApiKey,
+        llmApiKey: contextResult.context.llmApiKey,
+        context: {
+          callerContext: contextResult.context.callerContext,
+          memoryPrompt: contextResult.context.enableMemory
+            ? contextService.formatContextForLLM(contextResult.context.callerContext)
+            : undefined,
+          greeting: contextResult.context.greeting,
+          fallbackMessage: contextResult.context.fallbackMessage,
+          maxCallDuration: contextResult.context.maxCallDuration,
+        },
+      });
+
+      if (vocodeResult.success && vocodeResult.conversationId) {
+        await this.prisma.call.update({
+          where: { id: call.id },
+          data: { vocodeConversationId: vocodeResult.conversationId },
+        });
+      }
 
       res.status(200).json({
         success: true,
         message: 'Call received',
         callId: call.id,
+        conversationId: vocodeResult.conversationId,
       });
     } catch (error) {
       console.error('❌ Error handling Plivo incoming call:', error);

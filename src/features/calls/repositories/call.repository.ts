@@ -1,4 +1,4 @@
-import { Call, CallDirection, CallStatus, PrismaClient } from '@prisma/client';
+import { Call, CallDirection, CallStatus, PrismaClient, Provider } from '@prisma/client';
 
 export class CallRepository {
   constructor(private prisma: PrismaClient) {}
@@ -10,6 +10,7 @@ export class CallRepository {
     callerId: string;
     direction: CallDirection;
     status: CallStatus;
+    provider?: Provider;
   }): Promise<Call> {
     return this.prisma.call.create({
       data: {
@@ -19,6 +20,7 @@ export class CallRepository {
         callerId: data.callerId,
         direction: data.direction,
         status: data.status,
+        ...(data.provider && { provider: data.provider }),
       },
     });
   }
@@ -49,7 +51,7 @@ export class CallRepository {
       where: { id },
       data: {
         status: status as CallStatus,
-        ...(data?.durationSecs && { durationSecs: data.durationSecs }),
+        ...(data?.durationSecs !== undefined && { durationSecs: data.durationSecs }),
         ...(data?.endedAt && { endedAt: data.endedAt }),
         ...(status === 'COMPLETED' && { endedAt: new Date() }),
         ...(status === 'IN_PROGRESS' && { answeredAt: new Date() }),

@@ -1,6 +1,8 @@
 import { Request, Response } from 'express';
 
 import { PrismaService } from '../../../config/prisma.config';
+import { contextService } from '../../../services/context.service';
+import { vocodeService } from '../../../services/vocode.service';
 import { CallerRepository } from '../../callers/repositories/caller.repository';
 import { CallRepository } from '../../calls/repositories/call.repository';
 
@@ -19,7 +21,7 @@ export class ExotelWebhookController {
    */
   handleIncomingCall = async (req: Request, res: Response): Promise<void> => {
     try {
-      const { CallSid, From, To, Direction, CallStatus, DialWhomNumber } = req.body;
+      const { CallSid, From, To, Direction } = req.body;
 
       console.log(`📞 Exotel incoming call: ${CallSid} from ${From} to ${To}`);
 
@@ -64,6 +66,7 @@ export class ExotelWebhookController {
         callerId: caller.id,
         direction: Direction === 'incoming' ? 'INBOUND' : 'OUTBOUND',
         status: 'RINGING',
+        provider: 'EXOTEL',
       });
 
       console.log(`✅ Call record created: ${call.id}`);
@@ -82,12 +85,50 @@ export class ExotelWebhookController {
         return;
       }
 
-      // TODO: Connect to Vocode service
-      // For now, return success to Exotel
+      const contextResult = await contextService.buildCallContext(tenantId, caller.id);
+      if (!contextResult.success || !contextResult.context) {
+        res.status(500).json({
+          success: false,
+          message: contextResult.error || 'Failed to build caller context',
+        });
+        return;
+      }
+
+      const vocodeResult = await vocodeService.createConversation({
+        callId: call.id,
+        tenantId,
+        systemPrompt: contextResult.context.systemPrompt,
+        voiceId: contextResult.context.voiceId,
+        language: contextResult.context.language,
+        sttProvider: contextResult.context.sttProvider,
+        ttsProvider: contextResult.context.ttsProvider,
+        llmProvider: contextResult.context.llmProvider,
+        sttApiKey: contextResult.context.sttApiKey,
+        ttsApiKey: contextResult.context.ttsApiKey,
+        llmApiKey: contextResult.context.llmApiKey,
+        context: {
+          callerContext: contextResult.context.callerContext,
+          memoryPrompt: contextResult.context.enableMemory
+            ? contextService.formatContextForLLM(contextResult.context.callerContext)
+            : undefined,
+          greeting: contextResult.context.greeting,
+          fallbackMessage: contextResult.context.fallbackMessage,
+          maxCallDuration: contextResult.context.maxCallDuration,
+        },
+      });
+
+      if (vocodeResult.success && vocodeResult.conversationId) {
+        await this.prisma.call.update({
+          where: { id: call.id },
+          data: { vocodeConversationId: vocodeResult.conversationId },
+        });
+      }
+
       res.status(200).json({
         success: true,
         message: 'Call received',
         callId: call.id,
+        conversationId: vocodeResult.conversationId,
       });
     } catch (error) {
       console.error('❌ Error handling Exotel incoming call:', error);

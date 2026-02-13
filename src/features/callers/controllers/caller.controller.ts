@@ -62,6 +62,10 @@ export class CallerController {
       const caller = await this.callerService.update(callerId, tenantId, req.body);
       res.status(200).json({ success: true, data: caller });
     } catch (error) {
+      if (error instanceof Error && error.message === 'Caller not found') {
+        res.status(404).json({ success: false, message: 'Caller not found' });
+        return;
+      }
       next(error);
     }
   };
@@ -72,6 +76,10 @@ export class CallerController {
       const caller = await this.callerService.saveCaller(callerId, tenantId);
       res.status(200).json({ success: true, message: 'Caller saved', data: caller });
     } catch (error) {
+      if (error instanceof Error && error.message === 'Caller not found') {
+        res.status(404).json({ success: false, message: 'Caller not found' });
+        return;
+      }
       next(error);
     }
   };
@@ -82,6 +90,10 @@ export class CallerController {
       const caller = await this.callerService.unsaveCaller(callerId, tenantId);
       res.status(200).json({ success: true, message: 'Caller unsaved', data: caller });
     } catch (error) {
+      if (error instanceof Error && error.message === 'Caller not found') {
+        res.status(404).json({ success: false, message: 'Caller not found' });
+        return;
+      }
       next(error);
     }
   };
@@ -92,6 +104,10 @@ export class CallerController {
       await this.callerService.delete(callerId, tenantId);
       res.status(200).json({ success: true, message: 'Caller deleted' });
     } catch (error) {
+      if (error instanceof Error && error.message === 'Caller not found') {
+        res.status(404).json({ success: false, message: 'Caller not found' });
+        return;
+      }
       next(error);
     }
   };

@@ -4,6 +4,12 @@ import { UpdateCallerInput } from '../schemas/caller.schema';
 export class CallerService {
   private prisma = PrismaService.getInstance().client;
 
+  private async getTenantCaller(id: string, tenantId: string) {
+    return this.prisma.caller.findFirst({
+      where: { id, tenantId },
+    });
+  }
+
   async findById(id: string, tenantId: string) {
     return this.prisma.caller.findFirst({
       where: { id, tenantId },
@@ -69,6 +75,11 @@ export class CallerService {
   }
 
   async update(id: string, tenantId: string, data: UpdateCallerInput) {
+    const existing = await this.getTenantCaller(id, tenantId);
+    if (!existing) {
+      throw new Error('Caller not found');
+    }
+
     return this.prisma.caller.update({
       where: { id },
       data: {
@@ -81,6 +92,11 @@ export class CallerService {
   }
 
   async saveCaller(id: string, tenantId: string) {
+    const existing = await this.getTenantCaller(id, tenantId);
+    if (!existing) {
+      throw new Error('Caller not found');
+    }
+
     return this.prisma.caller.update({
       where: { id },
       data: {
@@ -93,7 +109,7 @@ export class CallerService {
   async unsaveCaller(id: string, tenantId: string) {
     // Get tenant to calculate new expiry
     const caller = await this.prisma.caller.findFirst({
-      where: { id },
+      where: { id, tenantId },
       include: { tenant: true },
     });
 
@@ -114,6 +130,11 @@ export class CallerService {
   }
 
   async delete(id: string, tenantId: string) {
+    const existing = await this.getTenantCaller(id, tenantId);
+    if (!existing) {
+      throw new Error('Caller not found');
+    }
+
     return this.prisma.caller.delete({
       where: { id },
     });

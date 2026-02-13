@@ -19,8 +19,6 @@ export const validateExotelWebhook = (req: Request, res: Response, next: NextFun
       return;
     }
 
-    // TODO: Implement actual Exotel signature verification
-    // Exotel uses HMAC-SHA1 or similar
     const webhookSecret = env.EXOTEL_WEBHOOK_SECRET;
 
     if (!webhookSecret) {
@@ -96,8 +94,6 @@ export const validatePlivoWebhook = (req: Request, res: Response, next: NextFunc
       return;
     }
 
-    // TODO: Implement actual Plivo signature verification
-    // Plivo uses HMAC-SHA256 with nonce
     const payload = JSON.stringify(req.body);
     const expectedSignature = crypto
       .createHmac('sha256', webhookSecret)
@@ -123,6 +119,76 @@ export const validatePlivoWebhook = (req: Request, res: Response, next: NextFunc
 };
 
 /**
+ * Validate Twilio webhook signature.
+ * Signature = base64(hmac_sha1(auth_token, full_url + sortedParams))
+ */
+export const validateTwilioWebhook = (req: Request, res: Response, next: NextFunction): void => {
+  try {
+    const signature = req.headers['x-twilio-signature'] as string | undefined;
+    if (!signature) {
+      res.status(401).json({
+        success: false,
+        message: 'Missing Twilio signature',
+      });
+      return;
+    }
+
+    const authToken = env.TWILIO_AUTH_TOKEN;
+    if (!authToken) {
+      if (env.NODE_ENV === 'development') {
+        console.warn('Twilio auth token not set, skipping signature validation in development');
+        next();
+        return;
+      }
+
+      res.status(500).json({
+        success: false,
+        message: 'Twilio auth token is not configured',
+      });
+      return;
+    }
+
+    // Prefer configured public URL to avoid proxy/host mismatch in local tunneling.
+    const configuredBase = env.PUBLIC_WEBHOOK_BASE_URL;
+    const fullUrl = configuredBase ? `${configuredBase}${req.originalUrl}` : `${req.protocol}://${req.get('host')}${req.originalUrl}`;
+
+    const params = req.body as Record<string, unknown>;
+    const sortedKeys = Object.keys(params).sort();
+    const payload = sortedKeys
+      .map(key => `${key}${Array.isArray(params[key]) ? params[key].join('') : String(params[key] ?? '')}`)
+      .join('');
+
+    const expectedSignature = crypto
+      .createHmac('sha1', authToken)
+      .update(fullUrl + payload)
+      .digest('base64');
+
+    // Constant-time comparison where possible.
+    const providedBuffer = Buffer.from(signature);
+    const expectedBuffer = Buffer.from(expectedSignature);
+    const signaturesMatch =
+      providedBuffer.length === expectedBuffer.length &&
+      crypto.timingSafeEqual(providedBuffer, expectedBuffer);
+
+    if (!signaturesMatch) {
+      res.status(401).json({
+        success: false,
+        message: 'Invalid Twilio signature',
+      });
+      return;
+    }
+
+    next();
+  } catch (error) {
+    console.error('Twilio webhook validation error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Webhook validation failed',
+    });
+  }
+};
+
+/**
  * Webhook deduplication middleware
  * Prevents processing duplicate webhooks using Redis or in-memory cache
  */
@@ -130,12 +196,13 @@ const processedWebhooks = new Set<string>();
 
 export const deduplicateWebhook = (req: Request, res: Response, next: NextFunction): void => {
   try {
-    // Generate unique ID from webhook data
-    const webhookId: string =
-      (req.headers['x-webhook-id'] as string) ||
-      req.body.CallSid ||
-      req.body.call_id ||
-      `${Date.now()}-${Math.random()}`;
+    // Generate stable ID from endpoint + payload so only exact retries are deduplicated.
+    const providedWebhookId = req.headers['x-webhook-id'] as string | undefined;
+    const payloadFingerprint = crypto
+      .createHash('sha256')
+      .update(`${req.originalUrl}:${JSON.stringify(req.body)}`)
+      .digest('hex');
+    const webhookId = providedWebhookId || payloadFingerprint;
 
     if (processedWebhooks.has(webhookId)) {
       console.log(`🔄 Duplicate webhook detected: ${webhookId}`);
@@ -173,3 +240,8 @@ export const exotelWebhookMiddleware = [deduplicateWebhook, validateExotelWebhoo
  * Combined webhook middleware for Plivo
  */
 export const plivoWebhookMiddleware = [deduplicateWebhook, validatePlivoWebhook];
+
+/**
+ * Combined webhook middleware for Twilio.
+ */
+export const twilioWebhookMiddleware = [deduplicateWebhook, validateTwilioWebhook];

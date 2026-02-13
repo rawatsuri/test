@@ -1,5 +1,6 @@
 import { Router } from 'express';
 
+import { requireInternalApiSecret } from '../../../../middleware/internal-auth.middleware';
 import { validateRequest } from '../../../../middleware/validation.middleware';
 import { InternalCallController } from '../controllers/internal.controller';
 import {
@@ -11,6 +12,8 @@ import {
 
 const router = Router({ mergeParams: true });
 const internalController = new InternalCallController();
+
+router.use(requireInternalApiSecret);
 
 // Internal routes - called by Vocode service
 // POST /api/internal/calls/:callId/transcript

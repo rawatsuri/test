@@ -37,6 +37,7 @@ export const envSchema = z.object({
   // Vocode Server
   VOCODE_BASE_URL: z.string().url().default('http://localhost:3001'),
   VOCODE_API_KEY: z.string().optional(),
+  INTERNAL_API_SECRET: z.string().min(16).optional(),
 
   // Exotel (Indian telephony)
   EXOTEL_ACCOUNT_SID: z.string().optional(),
@@ -44,6 +45,13 @@ export const envSchema = z.object({
   EXOTEL_API_TOKEN: z.string().optional(),
   EXOTEL_SUBDOMAIN: z.string().default('api'),
   EXOTEL_WEBHOOK_SECRET: z.string().optional(),
+
+  // Twilio (global telephony)
+  TWILIO_ACCOUNT_SID: z.string().optional(),
+  TWILIO_AUTH_TOKEN: z.string().optional(),
+  TWILIO_PHONE_NUMBER: z.string().optional(),
+  TWILIO_WEBHOOK_SECRET: z.string().optional(),
+  PUBLIC_WEBHOOK_BASE_URL: z.string().url().optional(),
 
   // Plivo (global telephony)
   PLIVO_AUTH_ID: z.string().optional(),

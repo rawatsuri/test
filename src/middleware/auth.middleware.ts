@@ -1,6 +1,7 @@
 import { NextFunction, Request, Response } from 'express';
 import jwt, { Secret } from 'jsonwebtoken';
 import { unifiedResponse } from 'uni-response';
+import crypto from 'crypto';
 
 import { env } from '../config/env-config';
 
@@ -122,8 +123,50 @@ export function webhookAuth(req: Request, res: Response, next: NextFunction): vo
     return;
   }
 
-  // TODO: Add Exotel/Plivo specific signature verification
-  // Exotel uses HMAC-SHA256, Plivo uses HTTP Basic Auth
+  const payload = JSON.stringify(req.body);
+
+  const exotelSignature = req.headers['x-exotel-signature'] as string | undefined;
+  if (exotelSignature && env.EXOTEL_WEBHOOK_SECRET) {
+    const expected = crypto.createHmac('sha1', env.EXOTEL_WEBHOOK_SECRET).update(payload).digest('base64');
+    if (expected === exotelSignature) {
+      next();
+      return;
+    }
+  }
+
+  const plivoSignature = req.headers['x-plivo-signature'] as string | undefined;
+  const plivoNonce = req.headers['x-plivo-signature-nonce'] as string | undefined;
+  if (plivoSignature && plivoNonce && env.PLIVO_WEBHOOK_SECRET) {
+    const expected = crypto
+      .createHmac('sha256', env.PLIVO_WEBHOOK_SECRET)
+      .update(plivoNonce + payload)
+      .digest('base64');
+    if (expected === plivoSignature) {
+      next();
+      return;
+    }
+  }
+
+  const twilioSignature = req.headers['x-twilio-signature'] as string | undefined;
+  if (twilioSignature && env.TWILIO_AUTH_TOKEN) {
+    const configuredBase = env.PUBLIC_WEBHOOK_BASE_URL;
+    const fullUrl = configuredBase
+      ? `${configuredBase}${req.originalUrl}`
+      : `${req.protocol}://${req.get('host')}${req.originalUrl}`;
+
+    const params = req.body as Record<string, unknown>;
+    const payloadString = Object.keys(params)
+      .sort()
+      .map(key => `${key}${Array.isArray(params[key]) ? params[key].join('') : String(params[key] ?? '')}`)
+      .join('');
+
+    const expected = crypto.createHmac('sha1', env.TWILIO_AUTH_TOKEN).update(fullUrl + payloadString).digest('base64');
+    if (expected === twilioSignature) {
+      next();
+      return;
+    }
+  }
+
   res.status(401).json(unifiedResponse(false, 'Webhook signature verification failed'));
   return;
 }

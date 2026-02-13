@@ -82,6 +82,13 @@ export class CallController {
         data: call,
       });
     } catch (error) {
+      if (error instanceof Error && error.message === 'Call not found') {
+        res.status(404).json({
+          success: false,
+          message: 'Call not found',
+        });
+        return;
+      }
       next(error);
     }
   };
@@ -122,6 +129,13 @@ export class CallController {
         message: 'Call deleted successfully',
       });
     } catch (error) {
+      if (error instanceof Error && error.message === 'Call not found') {
+        res.status(404).json({
+          success: false,
+          message: 'Call not found',
+        });
+        return;
+      }
       next(error);
     }
   };

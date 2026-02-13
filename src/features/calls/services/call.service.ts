@@ -1,5 +1,7 @@
 import { Call, PrismaClient } from '@prisma/client';
+import axios from 'axios';
 
+import { env } from '../../../config/env-config';
 import { PrismaService } from '../../../config/prisma.config';
 import { CreateCallInput, UpdateCallInput } from '../schemas/call.schema';
 
@@ -8,6 +10,12 @@ export class CallService {
 
   constructor() {
     this.prisma = PrismaService.getInstance().client;
+  }
+
+  private async getTenantCall(id: string, tenantId: string): Promise<Call | null> {
+    return this.prisma.call.findFirst({
+      where: { id, tenantId },
+    });
   }
 
   async create(data: CreateCallInput): Promise<Call> {
@@ -137,6 +145,11 @@ export class CallService {
   }
 
   async update(id: string, tenantId: string, data: UpdateCallInput): Promise<Call> {
+    const existing = await this.getTenantCall(id, tenantId);
+    if (!existing) {
+      throw new Error('Call not found');
+    }
+
     return this.prisma.call.update({
       where: {
         id,
@@ -160,7 +173,7 @@ export class CallService {
       where: { id },
       data: {
         status: status as any,
-        ...(data?.durationSecs && { durationSecs: data.durationSecs }),
+        ...(data?.durationSecs !== undefined && { durationSecs: data.durationSecs }),
         ...(data?.endedAt && { endedAt: data.endedAt }),
         ...(status === 'COMPLETED' && { endedAt: new Date() }),
         ...(status === 'IN_PROGRESS' && { answeredAt: new Date() }),
@@ -169,6 +182,11 @@ export class CallService {
   }
 
   async delete(id: string, tenantId: string): Promise<Call> {
+    const existing = await this.getTenantCall(id, tenantId);
+    if (!existing) {
+      throw new Error('Call not found');
+    }
+
     return this.prisma.call.delete({
       where: {
         id,
@@ -220,14 +238,22 @@ export class CallService {
         });
       }
 
+      let externalId = `outbound-${Date.now()}`;
+      if (phoneNumber.provider === 'TWILIO') {
+        externalId = await this.createTwilioOutboundCall(phoneNumber.number, toNumber);
+      }
+
       // Create call record
-      const call = await this.create({
-        externalId: `outbound-${Date.now()}`,
-        tenantId,
-        phoneNumberId,
-        callerId: caller.id,
-        direction: 'OUTBOUND',
-        status: 'RINGING',
+      const call = await this.prisma.call.create({
+        data: {
+          externalId,
+          tenantId,
+          phoneNumberId,
+          callerId: caller.id,
+          direction: 'OUTBOUND',
+          status: 'RINGING',
+          provider: phoneNumber.provider,
+        },
       });
 
       return { success: true, call };
@@ -235,5 +261,41 @@ export class CallService {
       console.error('Error triggering outbound call:', error);
       return { success: false, error: 'Failed to trigger outbound call' };
     }
+  }
+
+  private async createTwilioOutboundCall(fromNumber: string, toNumber: string): Promise<string> {
+    if (!env.TWILIO_ACCOUNT_SID || !env.TWILIO_AUTH_TOKEN || !env.PUBLIC_WEBHOOK_BASE_URL) {
+      throw new Error(
+        'TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and PUBLIC_WEBHOOK_BASE_URL are required for outbound calls',
+      );
+    }
+
+    const url = `https://api.twilio.com/2010-04-01/Accounts/${env.TWILIO_ACCOUNT_SID}/Calls.json`;
+    const payload = new URLSearchParams({
+      From: fromNumber,
+      To: toNumber,
+      Url: `${env.PUBLIC_WEBHOOK_BASE_URL}/webhooks/twilio/incoming`,
+      Method: 'POST',
+      StatusCallback: `${env.PUBLIC_WEBHOOK_BASE_URL}/webhooks/twilio/status`,
+      StatusCallbackMethod: 'POST',
+      StatusCallbackEvent: ['initiated', 'ringing', 'answered', 'completed'].join(' '),
+    });
+
+    const response = await axios.post(url, payload.toString(), {
+      auth: {
+        username: env.TWILIO_ACCOUNT_SID,
+        password: env.TWILIO_AUTH_TOKEN,
+      },
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      timeout: 15000,
+    });
+
+    if (!response.data?.sid) {
+      throw new Error('Twilio did not return call SID');
+    }
+
+    return response.data.sid as string;
   }
 }

@@ -1,24 +1,23 @@
-import { Request, Response, NextFunction } from 'express';
+import { NextFunction, Request, Response } from 'express';
+
 import { PrismaService } from '../../../../config/prisma.config';
+import { telephonyTransferService } from '../../../../services/telephony-transfer.service';
 import { CallService } from '../../services/call.service';
 import {
-  SaveTranscriptInput,
-  SaveExtractionInput,
   CompleteCallInput,
+  SaveExtractionInput,
+  SaveTranscriptInput,
   TransferCallInput,
 } from '../schemas/internal.schema';
 
 /**
  * Internal API Controller
- * Called by Vocode service to save call data
+ * Called by the voice service to save call data.
  */
 export class InternalCallController {
   private prisma = PrismaService.getInstance().client;
   private callService = new CallService();
 
-  /**
-   * Save transcript chunk from Vocode
-   */
   saveTranscript = async (
     req: Request<{ callId: string }, {}, SaveTranscriptInput>,
     res: Response,
@@ -37,8 +36,6 @@ export class InternalCallController {
         },
       });
 
-      console.log(`📝 Transcript saved for call ${callId}`);
-
       res.status(201).json({
         success: true,
         data: transcript,
@@ -48,9 +45,6 @@ export class InternalCallController {
     }
   };
 
-  /**
-   * Save extraction (structured data) from Vocode
-   */
   saveExtraction = async (
     req: Request<{ callId: string }, {}, SaveExtractionInput>,
     res: Response,
@@ -69,8 +63,6 @@ export class InternalCallController {
         },
       });
 
-      console.log(`📊 Extraction saved for call ${callId}: ${type}`);
-
       res.status(201).json({
         success: true,
         data: extraction,
@@ -80,9 +72,6 @@ export class InternalCallController {
     }
   };
 
-  /**
-   * Mark call as completed
-   */
   completeCall = async (
     req: Request<{ callId: string }, {}, CompleteCallInput>,
     res: Response,
@@ -96,7 +85,6 @@ export class InternalCallController {
         endedAt: new Date(),
       });
 
-      // Update summary and sentiment if provided
       if (summary || sentiment) {
         await this.prisma.call.update({
           where: { id: callId },
@@ -106,8 +94,6 @@ export class InternalCallController {
           },
         });
       }
-
-      console.log(`✅ Call ${callId} completed`);
 
       res.status(200).json({
         success: true,
@@ -119,9 +105,6 @@ export class InternalCallController {
     }
   };
 
-  /**
-   * Transfer call to human agent
-   */
   transferCall = async (
     req: Request<{ callId: string }, {}, TransferCallInput>,
     res: Response,
@@ -131,13 +114,33 @@ export class InternalCallController {
       const { callId } = req.params;
       const { transferTo } = req.body;
 
-      // Update call status to transferred
+      const callRecord = await this.prisma.call.findUnique({
+        where: { id: callId },
+        select: {
+          externalId: true,
+          provider: true,
+        },
+      });
+
+      if (!callRecord) {
+        res.status(404).json({
+          success: false,
+          message: 'Call not found',
+        });
+        return;
+      }
+
+      await telephonyTransferService.transferCall(
+        {
+          externalId: callRecord.externalId,
+          provider: callRecord.provider,
+        },
+        transferTo,
+      );
+
       const call = await this.callService.updateStatus(callId, 'TRANSFERRED', {
         endedAt: new Date(),
       });
-
-      // TODO: Actually trigger transfer via Exotel/Plivo API
-      console.log(`📞 Call ${callId} transferred to ${transferTo}`);
 
       res.status(200).json({
         success: true,
