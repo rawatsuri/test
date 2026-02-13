@@ -36,6 +36,7 @@ export const envSchema = z.object({
 
   // Vocode Server
   VOCODE_BASE_URL: z.string().url().default('http://localhost:3001'),
+  VOCODE_STREAM_URL: z.string().url().optional(),
   VOCODE_API_KEY: z.string().optional(),
   INTERNAL_API_SECRET: z.string().min(16).optional(),
 

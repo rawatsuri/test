@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 
+import { env } from '../../../config/env-config';
 import { PrismaService } from '../../../config/prisma.config';
 import { contextService } from '../../../services/context.service';
 import { vocodeService } from '../../../services/vocode.service';
@@ -125,10 +126,10 @@ export class TwilioWebhookController {
         }
       }
 
-      const greeting = this.escapeXml(
-        'Please stay on the line while we connect you.',
-      );
-      const twiml = `<?xml version="1.0" encoding="UTF-8"?><Response><Say>${greeting}</Say><Pause length="60"/></Response>`;
+      const streamUrl = this.resolveStreamUrl(vocodeConversationId);
+      const twiml = streamUrl
+        ? this.buildStreamTwiml(streamUrl, callId, tenantId)
+        : this.buildFallbackTwiml();
 
       res.type('text/xml').status(200).send(twiml);
     } catch (error) {
@@ -213,5 +214,38 @@ export class TwilioWebhookController {
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&apos;');
+  }
+
+  private buildFallbackTwiml(): string {
+    const greeting = this.escapeXml('Please stay on the line while we connect you.');
+    return `<?xml version="1.0" encoding="UTF-8"?><Response><Say>${greeting}</Say><Pause length="60"/></Response>`;
+  }
+
+  private buildStreamTwiml(streamUrl: string, callId: string, tenantId: string): string {
+    const escapedUrl = this.escapeXml(streamUrl);
+    const escapedCallId = this.escapeXml(callId);
+    const escapedTenantId = this.escapeXml(tenantId);
+    return `<?xml version="1.0" encoding="UTF-8"?><Response><Connect><Stream url="${escapedUrl}"><Parameter name="callId" value="${escapedCallId}"/><Parameter name="tenantId" value="${escapedTenantId}"/></Stream></Connect></Response>`;
+  }
+
+  private resolveStreamUrl(vocodeConversationId?: string | null): string | null {
+    if (!vocodeConversationId) {
+      return null;
+    }
+
+    if (env.VOCODE_STREAM_URL) {
+      if (env.VOCODE_STREAM_URL.includes('{conversationId}')) {
+        return env.VOCODE_STREAM_URL.replace('{conversationId}', vocodeConversationId);
+      }
+      const separator = env.VOCODE_STREAM_URL.endsWith('/') ? '' : '/';
+      return `${env.VOCODE_STREAM_URL}${separator}${vocodeConversationId}`;
+    }
+
+    // Fallback convention for self-hosted vocode telephony server.
+    const wsBase = env.VOCODE_BASE_URL.replace(/^http:\/\//, 'ws://').replace(
+      /^https:\/\//,
+      'wss://',
+    );
+    return `${wsBase}/connect_call/${vocodeConversationId}`;
   }
 }

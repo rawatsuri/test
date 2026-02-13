@@ -34,12 +34,22 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cors());
 
-app.use(clerkMiddleware());
-app.use(loggerMiddleware);
-app.use(pinoLogger);
+if (env.NODE_ENV === 'production' && env.CLERK_SECRET_KEY && env.CLERK_PUBLISHABLE_KEY) {
+  app.use(clerkMiddleware());
+} else {
+  console.warn('Clerk keys not configured. Skipping Clerk middleware in this environment.');
+}
+if (env.NODE_ENV === 'production') {
+  app.use(loggerMiddleware);
+  app.use(pinoLogger);
+}
 
 app.get('/heartbeat', (req: Request, res: Response): void => {
-  req.log.info('Heartbeat ok');
+  if (req.log?.info) {
+    req.log.info('Heartbeat ok');
+  } else {
+    console.log('Heartbeat ok');
+  }
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 

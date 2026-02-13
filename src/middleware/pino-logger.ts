@@ -1,6 +1,6 @@
 // src/middleware/pino-logger.ts
 import { randomUUID } from 'crypto';
-import { NextFunction,Request, Response } from 'express';
+import { NextFunction, Request, Response } from 'express';
 import { ensureDir } from 'fs-extra'; // Optional: to ensure log directory exists
 import { join } from 'path';
 import pino, { Logger } from 'pino';
