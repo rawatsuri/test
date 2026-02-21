@@ -2,29 +2,16 @@
 Sarvam AI synthesizer for Indian language text-to-speech.
 
 Sarvam AI offers TTS via REST API optimized for Indian languages.
-
-Documentation: https://docs.sarvam.ai/api-reference-docs/text-to-speech/convert
-Pricing: ₹15/10K characters
-
-Features:
-- Supports 10 Indian languages + English
-- Natural-sounding Indian voices
-- Models: bulbul:v2 (voice control), bulbul:v3 (HD quality)
-- Output: base64 encoded audio
-- Configurable sample rates: 8000-48000 Hz
-
-Supported languages:
-- hi-IN (Hindi), bn-IN (Bengali), ta-IN (Tamil), te-IN (Telugu)
-- kn-IN (Kannada), ml-IN (Malayalam), mr-IN (Marathi), gu-IN (Gujarati)
-- pa-IN (Punjabi), or-IN (Odia), en-IN (Indian English)
 """
 
 import asyncio
 import base64
+import io
 from typing import AsyncGenerator, Callable, Optional
 
 import aiohttp
 from loguru import logger
+from pydub import AudioSegment
 
 from vocode import getenv
 from vocode.streaming.models.audio import AudioEncoding
@@ -42,8 +29,6 @@ from vocode.streaming.synthesizer.base_synthesizer import (
 class SarvamSynthesizer(BaseSynthesizer[SarvamSynthesizerConfig]):
     """
     Sarvam AI text-to-speech synthesizer for Indian languages.
-    
-    Uses REST API to convert text to natural-sounding Indian language speech.
     """
     
     def __init__(
@@ -85,8 +70,8 @@ class SarvamSynthesizer(BaseSynthesizer[SarvamSynthesizerConfig]):
                     "sample_rate": self.synthesizer_config.sampling_rate,
                 }
                 
-                # Add voice control params for bulbul:v2
-                if "v2" in self.synthesizer_config.model:
+                # Voice control
+                if "v2" in self.synthesizer_config.model or "v3" in self.synthesizer_config.model:
                     if self.synthesizer_config.pitch != 0.0:
                         payload["pitch"] = self.synthesizer_config.pitch
                     if self.synthesizer_config.speed != 1.0:
@@ -110,45 +95,54 @@ class SarvamSynthesizer(BaseSynthesizer[SarvamSynthesizerConfig]):
                         return
                     
                     result = await response.json()
-                    
-                    # Sarvam returns: {"request_id": "...", "audios": ["base64_audio"]}
                     audios = result.get("audios", [])
                     if not audios:
-                        logger.warning("Sarvam returned empty audio")
                         return
                     
-                    # Decode base64 audio
-                    audio_b64 = audios[0]
-                    audio_bytes = base64.b64decode(audio_b64)
+                    audio_bytes = base64.b64decode(audios[0])
                     
-                    # Convert to expected encoding if needed
+                    # SYNTHESIZER FIX: Robust Sample Rate Handling
+                    # We'll use pydub to detect if it's 22050 or something else.
+                    # Since Sarvam Bulbul often defaults to 22050.
+                    # We'll try to load it correctly and then resample.
+                    
+                    # If it sounds robotic, it's usually because 22050Hz is being played at 8000Hz.
+                    # Let's force load it as 22050 if it came from Bulbul.
+                    audio_seg = AudioSegment.from_raw(
+                        io.BytesIO(audio_bytes),
+                        sample_width=2,
+                        frame_rate=22050, # Default for Bulbul
+                        channels=1
+                    )
+                    
+                    # Resample to telephony rate (8000)
+                    if audio_seg.frame_rate != self.synthesizer_config.sampling_rate:
+                        logger.debug(f"Resampling Sarvam audio from {audio_seg.frame_rate} to {self.synthesizer_config.sampling_rate}")
+                        audio_seg = audio_seg.set_frame_rate(self.synthesizer_config.sampling_rate)
+                    
+                    audio_bytes = audio_seg.raw_data
+                    
+                    # Convert to mulaw for Twilio
                     if self.synthesizer_config.audio_encoding == AudioEncoding.MULAW:
                         import audioop
-                        # Convert from LINEAR16 to MULAW
                         audio_bytes = audioop.lin2ulaw(audio_bytes, 2)
                     
-                    # Yield audio in chunks
                     for i in range(0, len(audio_bytes), chunk_size):
                         chunk = audio_bytes[i:i + chunk_size]
-                        is_last = (i + chunk_size >= len(audio_bytes))
                         yield SynthesisResult.ChunkResult(
                             chunk=chunk,
-                            is_last_chunk=is_last,
+                            is_last_chunk=(i + chunk_size >= len(audio_bytes)),
                         )
                         
             except Exception as e:
                 logger.error(f"Sarvam TTS synthesis error: {e}")
         
-        def get_message_up_to(seconds: Optional[float]) -> str:
-            return message.text
-        
         return SynthesisResult(
             chunk_generator=chunk_generator(),
-            get_message_up_to=get_message_up_to,
+            get_message_up_to=lambda seconds: message.text,
         )
     
     async def tear_down(self):
-        """Close aiohttp session."""
         if self._session and not self._session.closed:
             await self._session.close()
         await super().tear_down()

@@ -70,6 +70,7 @@
     "express-rate-limit": "^7.5.0",
     "fs-extra": "^11.3.0",
     "helmet": "^8.0.0",
+    "http-proxy-middleware": "^3.0.5",
     "jsonwebtoken": "^9.0.2",
     "pino": "^9.6.0",
     "pino-http": "^10.4.0",

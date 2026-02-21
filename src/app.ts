@@ -2,8 +2,27 @@ import { clerkMiddleware } from '@clerk/express';
 import cors from 'cors';
 import express, { Application, Request, Response } from 'express';
 import helmet from 'helmet';
+import httpProxy from 'http-proxy';
 
 import { env } from './config/env-config';
+
+// Raw http-proxy for reliable WebSocket + HTTP proxying to Vocode
+const vocodeProxyServer = httpProxy.createProxyServer({
+  target: 'http://localhost:3001',
+  ws: true,
+  changeOrigin: true,
+});
+
+vocodeProxyServer.on('error', (err, req, res) => {
+  console.error('[Vocode Proxy Error]', err.message);
+});
+
+// Express middleware to proxy HTTP requests to Vocode
+const vocodeHttpProxy = (req: any, res: any) => {
+  vocodeProxyServer.web(req, res);
+};
+
+
 import agentConfigRoutes from './features/agent-config/routes/agent-config.routes';
 import authRoutes from './features/auth/routes/auth.routes';
 import callerRoutes from './features/callers/routes/caller.routes';
@@ -28,11 +47,21 @@ import { rateLimiter } from './middleware/security.middleware';
 
 const app: Application = express();
 
+// Trust proxy (required for ngrok/reverse proxy to work with rate limiter)
+app.set('trust proxy', 1);
+
 app.use(rateLimiter);
 app.use(helmet());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cors());
+
+// Proxy Vocode-bound routes to Python service (before Express JSON parsing)
+app.use('/connect_call', vocodeHttpProxy);     // WebSocket audio streams
+app.use('/inbound_call', vocodeHttpProxy);     // Vocode's own inbound call TwiML
+app.use('/events', vocodeHttpProxy);           // Vonage/Vocode events
+app.use('/recordings', vocodeHttpProxy);       // Vocode recordings
+app.use('/conversations', vocodeHttpProxy);    // Vocode conversation API
 
 if (env.NODE_ENV === 'production' && env.CLERK_SECRET_KEY && env.CLERK_PUBLISHABLE_KEY) {
   app.use(clerkMiddleware());
@@ -118,4 +147,4 @@ app.use('/api/internal/calls/:callId', internalCallRoutes);
 app.use(apiErrorHandler);
 app.use(unmatchedRoutes);
 
-export { app };
+export { app, vocodeProxyServer };

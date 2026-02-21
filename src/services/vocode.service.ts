@@ -45,7 +45,7 @@ export class VocodeService {
     context?: any;
   }): Promise<{ success: boolean; conversationId?: string; error?: string }> {
     try {
-      const response = await this.client.post('/conversations', {
+      const response = await this.client.post('/create_conversation', {
         call_id: config.callId,
         tenant_id: config.tenantId,
         system_prompt: config.systemPrompt,

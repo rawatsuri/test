@@ -1,4 +1,4 @@
-import { app } from './app';
+import { app, vocodeProxyServer } from './app';
 import { env } from './config/env-config';
 import { PrismaService } from './config/prisma.config';
 
@@ -17,6 +17,14 @@ class Server {
   public start(): void {
     this.serverInstance = app.listen(this.port, () => {
       console.log(`Server running at http://localhost:${this.port}`);
+    });
+
+    // Forward WebSocket upgrades to Vocode (for /connect_call audio streams)
+    this.serverInstance.on('upgrade', (req: any, socket: any, head: any) => {
+      if (req.url?.startsWith('/connect_call')) {
+        console.log(`[WS Proxy] Forwarding WebSocket: ${req.url}`);
+        vocodeProxyServer.ws(req, socket, head);
+      }
     });
 
     // Handle system signals for graceful shutdown

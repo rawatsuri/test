@@ -35,7 +35,7 @@ export const envSchema = z.object({
   WEBHOOK_SECRET: z.string().optional(),
 
   // Vocode Server
-  VOCODE_BASE_URL: z.string().url().default('http://localhost:3001'),
+  VOCODE_BASE_URL: z.string().url().default('http://localhost:3000'),
   VOCODE_STREAM_URL: z.string().url().optional(),
   VOCODE_API_KEY: z.string().optional(),
   INTERNAL_API_SECRET: z.string().min(16).optional(),
@@ -73,6 +73,12 @@ export const envSchema = z.object({
 
   // Groq (Fast LLM)
   GROQ_API_KEY: z.string().optional(),
+
+  // Anthropic (LLM)
+  ANTHROPIC_API_KEY: z.string().optional(),
+
+  // Cartesia (TTS)
+  CARTESIA_API_KEY: z.string().optional(),
 });
 
 export type EnvVars = z.infer<typeof envSchema>;
