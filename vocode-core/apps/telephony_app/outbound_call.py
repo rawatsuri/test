@@ -26,6 +26,7 @@ RULES:
 - Answer directly. Do not have long conversations. No filler.
 - Match the caller's language: if they speak Hindi, reply in Hindi. If English, reply in English. If Hinglish, reply in Hinglish.
 - Be conversational and natural, like a real person.
+- If the caller asks to stop, cut, or end the call, you MUST say exactly "Goodbye" or "Bye" at the end of your sentence so the system knows to hang up.
 - Never use emojis, markdown, or special characters.
 - If you don't understand something, ask them to repeat politely."""
 
@@ -48,11 +49,14 @@ async def main():
             # -- Stability settings --
             allowed_idle_time_seconds=60,
             num_check_human_present_times=3,
+            initial_message_delay=0.0,
             send_filler_audio=FillerAudioConfig(
-                silence_threshold_seconds=0.5,
+                silence_threshold_seconds=0.1,  # Instantly play filler down from 0.5s to mask the 1s TTS delay
                 use_phrases=True,
             ),
-            interrupt_sensitivity="low",
+            use_backchannels=True, # Active listening
+            backchannel_probability=0.8,
+            interrupt_sensitivity="high", # Boosted sensitivity to hear caller over itself
             end_conversation_on_goodbye=True,
         ),
         telephony_config=TwilioConfig(
@@ -62,6 +66,8 @@ async def main():
         # Sarvam AI for best Hinglish STT (with auto-fallback to Deepgram)
         transcriber_config=SarvamTranscriberConfig.from_telephone_input_device(
             endpointing_config=DeepgramEndpointingConfig(),
+            min_interrupt_confidence=0.1, # Lowest threshold so ANY human speech bursts cut the AI off
+            mute_during_speech=False, # CRITICAL: explicitly ensure microphone isn't muted while AI talks
             language="hi-IN", # Explicitly set to Hindi/Hinglish
         ),
         # Sarvam AI for natural Indian TTS

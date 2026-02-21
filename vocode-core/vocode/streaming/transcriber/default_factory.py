@@ -34,8 +34,8 @@ _HEALTH_TTL_SECONDS = 300  # Re-check every 5 minutes
 def _sarvam_to_deepgram_fallback(transcriber_config: SarvamTranscriberConfig):
     """
     Build a Deepgram config optimized for Hinglish (Hindi-English code-mixing).
-    Uses nova-3 model with 'multi' language — Deepgram's nova-3 handles
-    Hinglish code-switching natively.
+    Uses nova-2 model with 'hi' language — Deepgram's nova-2 handles
+    Hinglish code-switching natively and avoids 'multi' model hallucinations.
     """
     deepgram_config = DeepgramTranscriberConfig(
         sampling_rate=transcriber_config.sampling_rate,
@@ -43,10 +43,10 @@ def _sarvam_to_deepgram_fallback(transcriber_config: SarvamTranscriberConfig):
         chunk_size=transcriber_config.chunk_size,
         endpointing_config=transcriber_config.endpointing_config,
         downsampling=transcriber_config.downsampling,
-        min_interrupt_confidence=transcriber_config.min_interrupt_confidence,
-        mute_during_speech=transcriber_config.mute_during_speech,
-        language="multi",
-        model="nova-3",
+        min_interrupt_confidence=transcriber_config.min_interrupt_confidence or 0.3,
+        mute_during_speech=False, # CRITICAL: explicitly ensure microphone isn't muted while AI talks
+        language="hi",
+        model="nova-2",
     )
     return deepgram_config
 

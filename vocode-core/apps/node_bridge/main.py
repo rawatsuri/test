@@ -182,6 +182,10 @@ def _build_transcriber_config(req: CreateConversationRequest):
     stt = req.stt_provider.lower()
     endpointing = _build_endpointing_config(req)
 
+    # Universal Barge-In Settings
+    barge_in_confidence = 0.1
+    mute_during_speech = False
+
     if stt == "sarvam":
         sarvam_lang = _normalize_indic_language(
             req.stt_language or req.language, default="hi-IN"
@@ -192,6 +196,8 @@ def _build_transcriber_config(req: CreateConversationRequest):
             api_key=req.stt_api_key,
             model=req.stt_model or "saaras:v3",
             mode=getattr(req, 'stt_mode', None) or "transcribe",
+            min_interrupt_confidence=barge_in_confidence,
+            mute_during_speech=mute_during_speech,
         )
 
     if stt == "assembly_ai":
@@ -200,6 +206,8 @@ def _build_transcriber_config(req: CreateConversationRequest):
             end_utterance_silence_threshold_milliseconds=int(
                 (req.endpointing_time_cutoff or 0.22) * 1000
             ),
+            min_interrupt_confidence=barge_in_confidence,
+            mute_during_speech=mute_during_speech,
         )
 
     if stt == "google":
@@ -207,21 +215,36 @@ def _build_transcriber_config(req: CreateConversationRequest):
             endpointing_config=endpointing,
             language_code=req.stt_language or req.language or "en-US",
             model=req.stt_model or None,
+            min_interrupt_confidence=barge_in_confidence,
+            mute_during_speech=mute_during_speech,
         )
 
     if stt == "azure":
         return AzureTranscriberConfig.from_telephone_input_device(
             endpointing_config=endpointing,
             language=req.stt_language or req.language or "en-US",
+            min_interrupt_confidence=barge_in_confidence,
+            mute_during_speech=mute_during_speech,
         )
 
     # Default: Deepgram — best latency + accuracy for telephony
+    dg_lang = req.stt_language or req.language or "multi"
+    dg_model = req.stt_model or "nova-3"
+    
+    # FIX: Deepgram nova-3 and 'multi' hallucinate Spanish heavily on background noise.
+    # If the requested language is Indian (Hindi/Hinglish/Indian English), force nova-2 + 'hi'
+    if dg_lang.lower().replace("_", "-") in ("hi", "hi-in", "en-in", "hin"):
+        dg_lang = "hi"
+        dg_model = "nova-2"
+
     return DeepgramTranscriberConfig.from_telephone_input_device(
         endpointing_config=endpointing,
-        model=req.stt_model or "nova-2",
-        tier=None,  # nova-2 doesn't use tier
-        language=req.stt_language or req.language or None,
+        model=dg_model,
+        tier=None,
+        language=dg_lang,
         api_key=req.stt_api_key,
+        min_interrupt_confidence=barge_in_confidence,
+        mute_during_speech=mute_during_speech,
     )
 
 
@@ -235,6 +258,10 @@ def _build_agent_config(req: CreateConversationRequest):
         memory_prompt = req.context.get("memoryPrompt")
 
     prompt_preamble = req.system_prompt.strip()
+    # Inject call termination instructions for all agents
+    termination_instruction = "- If the caller asks to stop, cut, or end the call, you MUST say exactly \"Goodbye\" or \"Bye\" at the end of your sentence so the system knows to hang up."
+    prompt_preamble = f"{prompt_preamble}\n{termination_instruction}"
+
     if memory_prompt:
         prompt_preamble = f"{prompt_preamble}\n\nMEMORY CONTEXT:\n{memory_prompt}"
 
@@ -244,7 +271,7 @@ def _build_agent_config(req: CreateConversationRequest):
     use_backchannels = req.use_backchannels or False
     backchannel_probability = req.backchannel_probability or 0.7
     first_response_filler = req.first_response_filler_message
-    interrupt_sensitivity = req.interrupt_sensitivity or "low"
+    interrupt_sensitivity = req.interrupt_sensitivity or "high" # Boosted sensitivity to hear caller over itself
     send_filler_audio = req.send_filler_audio or False
     initial_message_delay = req.initial_message_delay or 0.0
 
@@ -266,6 +293,7 @@ def _build_agent_config(req: CreateConversationRequest):
             interrupt_sensitivity=interrupt_sensitivity,
             send_filler_audio=filler_audio_config,
             initial_message_delay=initial_message_delay,
+            end_conversation_on_goodbye=True,
         )
 
     if llm == "anthropic":
@@ -279,6 +307,7 @@ def _build_agent_config(req: CreateConversationRequest):
             interrupt_sensitivity=interrupt_sensitivity,
             send_filler_audio=filler_audio_config,
             initial_message_delay=initial_message_delay,
+            end_conversation_on_goodbye=True,
         )
 
     # Default: OpenAI ChatGPT
@@ -295,6 +324,7 @@ def _build_agent_config(req: CreateConversationRequest):
         interrupt_sensitivity=interrupt_sensitivity,
         send_filler_audio=filler_audio_config,
         initial_message_delay=initial_message_delay,
+        end_conversation_on_goodbye=True,
     )
 
 

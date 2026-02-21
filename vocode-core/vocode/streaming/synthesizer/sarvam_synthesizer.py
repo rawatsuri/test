@@ -150,11 +150,13 @@ class SarvamSynthesizer(BaseSynthesizer[SarvamSynthesizerConfig]):
                     if self.synthesizer_config.audio_encoding == AudioEncoding.MULAW:
                         audio_bytes = audioop.lin2ulaw(audio_bytes, 2)
                     
-                    for i in range(0, len(audio_bytes), chunk_size):
-                        chunk = audio_bytes[i:i + chunk_size]
+                    # Stream smaller chunks to get audio flowing to Twilio faster
+                    stream_chunk_size = min(chunk_size, 1024)
+                    for i in range(0, len(audio_bytes), stream_chunk_size):
+                        chunk = audio_bytes[i:i + stream_chunk_size]
                         yield SynthesisResult.ChunkResult(
                             chunk=chunk,
-                            is_last_chunk=(i + chunk_size >= len(audio_bytes)),
+                            is_last_chunk=(i + stream_chunk_size >= len(audio_bytes)),
                         )
                         
             except Exception as e:
