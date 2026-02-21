@@ -23,6 +23,7 @@ from vocode.streaming.models.synthesizer import (
 from vocode.streaming.synthesizer.base_synthesizer import (
     BaseSynthesizer,
     SynthesisResult,
+    FillerAudio,
 )
 
 
@@ -41,14 +42,40 @@ class SarvamSynthesizer(BaseSynthesizer[SarvamSynthesizerConfig]):
             raise ValueError(
                 "Please set SARVAM_API_KEY environment variable or pass it as a parameter"
             )
-        self._session: Optional[aiohttp.ClientSession] = None
-    
-    async def _get_session(self) -> aiohttp.ClientSession:
-        """Get or create aiohttp session."""
-        if self._session is None or self._session.closed:
-            self._session = aiohttp.ClientSession()
-        return self._session
-    
+
+    async def get_phrase_filler_audios(self) -> list[FillerAudio]:
+        filler_phrases = [
+            BaseMessage(text="Hmm..."),
+            BaseMessage(text="Haan..."),
+            BaseMessage(text="Acha..."),
+            BaseMessage(text="Theek hai..."),
+        ]
+        
+        filler_audios = []
+        for phrase in filler_phrases:
+            logger.debug(f"Pre-generating Sarvam TTS filler audio for: {phrase.text}")
+            try:
+                result = await self.create_speech(phrase, chunk_size=4096)
+                chunks = []
+                async for chunk_result in result.chunk_generator:
+                    chunks.append(chunk_result.chunk)
+                
+                audio_data = b"".join(chunks)
+                if audio_data:
+                    filler_audios.append(
+                        FillerAudio(
+                            message=phrase,
+                            audio_data=audio_data,
+                            synthesizer_config=self.synthesizer_config,
+                            is_interruptible=True,
+                            seconds_per_chunk=1,
+                        )
+                    )
+            except Exception as e:
+                logger.error(f"Failed to generate filler audio for {phrase.text}: {e}")
+                
+        return filler_audios
+
     async def create_speech(
         self,
         message: BaseMessage,
@@ -66,7 +93,7 @@ class SarvamSynthesizer(BaseSynthesizer[SarvamSynthesizerConfig]):
                 return
 
             try:
-                session = await self._get_session()
+                session = self.async_requestor.get_session()
                 
                 # Build request payload
                 payload = {
@@ -151,8 +178,10 @@ class SarvamSynthesizer(BaseSynthesizer[SarvamSynthesizerConfig]):
                         audio_bytes = audioop.lin2ulaw(audio_bytes, 2)
                     
                     # Stream smaller chunks to get audio flowing to Twilio faster
-                    stream_chunk_size = min(chunk_size, 1024)
+                    # IMPORTANT: We MUST pace the generator so the event loop can process Twilio clear signals for barge-in
+                    stream_chunk_size = min(chunk_size, 4096)
                     for i in range(0, len(audio_bytes), stream_chunk_size):
+                        await asyncio.sleep(0.001)  # Yield to event loop to allow interrupts
                         chunk = audio_bytes[i:i + stream_chunk_size]
                         yield SynthesisResult.ChunkResult(
                             chunk=chunk,
@@ -167,7 +196,4 @@ class SarvamSynthesizer(BaseSynthesizer[SarvamSynthesizerConfig]):
             get_message_up_to=lambda seconds: message.text,
         )
     
-    async def tear_down(self):
-        if self._session and not self._session.closed:
-            await self._session.close()
-        await super().tear_down()
+

@@ -270,12 +270,14 @@ def _build_agent_config(req: CreateConversationRequest):
     # Common agent behavior params
     use_backchannels = req.use_backchannels or False
     backchannel_probability = req.backchannel_probability or 0.7
-    first_response_filler = req.first_response_filler_message
+    # FIX: Provide an instant "Haan," (Yes) backchannel filler by default to mask TTS generation latency
+    first_response_filler = req.first_response_filler_message or "Haan,"
     interrupt_sensitivity = req.interrupt_sensitivity or "high" # Boosted sensitivity to hear caller over itself
+    # Reverting to False by default so the AI doesn't constantly inject "Acha" mid-sentence.
     send_filler_audio = req.send_filler_audio or False
     initial_message_delay = req.initial_message_delay or 0.0
 
-    filler_audio_config = FillerAudioConfig() if send_filler_audio else False
+    filler_audio_config = FillerAudioConfig() if send_filler_audio else None
 
     llm = req.llm_provider.lower()
 
