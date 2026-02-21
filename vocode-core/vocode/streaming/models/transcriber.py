@@ -179,6 +179,8 @@ class SarvamTranscriberConfig(TranscriberConfig, type=TranscriberType.SARVAM.val
     api_key: Optional[str] = None
     ws_url: str = SARVAM_API_WS_URL
     language: Optional[str] = "hi-IN"  # Hindi default; None for auto-detect
+    mode: Optional[str] = None
+    model: str = "saarika:v2.5"
     # Supported languages: hi-IN, bn-IN, ta-IN, te-IN, kn-IN, ml-IN, mr-IN, gu-IN, pa-IN, or-IN, en-IN
 
 

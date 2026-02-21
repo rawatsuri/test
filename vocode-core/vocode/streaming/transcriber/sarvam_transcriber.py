@@ -21,11 +21,13 @@ Supported languages:
 
 import asyncio
 import base64
+import audioop
 import json
 from typing import Optional
 
 import websockets
 from loguru import logger
+from websockets.exceptions import ConnectionClosedError, ConnectionClosedOK
 from websockets.asyncio.client import ClientConnection
 
 from vocode import getenv
@@ -65,6 +67,7 @@ class SarvamTranscriber(BaseAsyncTranscriber[SarvamTranscriberConfig]):
         self._ended = False
         self.is_ready = False
         self.ws_connection: Optional[ClientConnection] = None
+        self._ratecv_state = None
         
     def get_sarvam_url(self) -> str:
         """Build WebSocket URL with query parameters."""
@@ -75,15 +78,13 @@ class SarvamTranscriber(BaseAsyncTranscriber[SarvamTranscriberConfig]):
         sample_rate = self.transcriber_config.sampling_rate
         params.append(f"sample_rate={sample_rate}")
         
-        # Language (optional - if None, Sarvam auto-detects)
+        # mode is only valid for specific Sarvam models.
+        if self.transcriber_config.mode:
+            params.append(f"mode={self.transcriber_config.mode}")
+        params.append("input_audio_codec=pcm_s16le")
         if self.transcriber_config.language:
-            params.append(f"language={self.transcriber_config.language}")
-        
-        # Encoding - Sarvam expects raw PCM
-        if self.transcriber_config.audio_encoding == AudioEncoding.LINEAR16:
-            params.append("encoding=pcm16")
-        elif self.transcriber_config.audio_encoding == AudioEncoding.MULAW:
-            params.append("encoding=mulaw")
+            params.append(f"language-code={self.transcriber_config.language}")
+        params.append(f"model={self.transcriber_config.model}")
         
         return f"{base_url}?{'&'.join(params)}"
     
@@ -93,6 +94,8 @@ class SarvamTranscriber(BaseAsyncTranscriber[SarvamTranscriberConfig]):
         while not self._ended and restarts < NUM_RESTARTS:
             try:
                 await self._process_audio()
+                restarts += 1
+                logger.debug(f"Sarvam connection closed, restarting... attempt={restarts}")
             except Exception as e:
                 logger.warning(f"Sarvam connection error: {e}, restarting...")
                 restarts += 1
@@ -108,11 +111,12 @@ class SarvamTranscriber(BaseAsyncTranscriber[SarvamTranscriberConfig]):
             "api-subscription-key": self.api_key,
         }
         
+        logger.debug(f"Connecting to Sarvam WebSocket at {url}")
         async with websockets.connect(url, additional_headers=headers) as ws:
             self.ws_connection = ws
             self.is_ready = True
             logger.info("Connected to Sarvam AI WebSocket")
-            
+
             # Run send and receive concurrently
             await asyncio.gather(
                 self._send_audio_loop(ws),
@@ -125,26 +129,61 @@ class SarvamTranscriber(BaseAsyncTranscriber[SarvamTranscriberConfig]):
             try:
                 # Get audio chunk from input queue
                 audio_chunk = await asyncio.wait_for(
-                    self.input_queue.get(),
+                    self._input_queue.get(),
                     timeout=5.0
                 )
                 
                 if audio_chunk is None:
                     break
                 
-                # Sarvam expects base64 encoded audio in JSON format
-                # Note: Check Sarvam's actual WebSocket message format
+                # Twilio media stream is mu-law at 8kHz. Sarvam expects pcm_s16le.
+                if self.transcriber_config.audio_encoding == AudioEncoding.MULAW:
+                    audio_chunk = audioop.ulaw2lin(audio_chunk, 2)
+
+                audio_chunk, self._ratecv_state = audioop.ratecv(
+                    audio_chunk,
+                    2,
+                    1,
+                    self.transcriber_config.sampling_rate,
+                    16000,
+                    self._ratecv_state,
+                )
+
                 audio_b64 = base64.b64encode(audio_chunk).decode("utf-8")
-                message = json.dumps({
-                    "type": "audio",
-                    "data": audio_b64
-                })
-                await ws.send(message)
+                await ws.send(
+                    json.dumps(
+                        {
+                            "audio": {
+                                "data": audio_b64,
+                                "encoding": "audio/wav",
+                                "sample_rate": 16000,
+                            }
+                        }
+                    )
+                )
                 
             except asyncio.TimeoutError:
-                # Send keepalive if no audio
+                # Send short silence heartbeat to avoid idle socket closure.
+                silent_audio = b"\0" * 640
+                audio_b64 = base64.b64encode(silent_audio).decode("utf-8")
+                await ws.send(
+                    json.dumps(
+                        {
+                            "audio": {
+                                "data": audio_b64,
+                                "encoding": "audio/wav",
+                                "sample_rate": 16000,
+                            }
+                        }
+                    )
+                )
                 continue
             except asyncio.CancelledError:
+                break
+            except ConnectionClosedOK:
+                break
+            except ConnectionClosedError as e:
+                logger.error(f"Error sending audio to Sarvam: {e}")
                 break
             except Exception as e:
                 logger.error(f"Error sending audio to Sarvam: {e}")
@@ -158,25 +197,38 @@ class SarvamTranscriber(BaseAsyncTranscriber[SarvamTranscriberConfig]):
                 data = json.loads(message)
                 
                 event_type = data.get("type", data.get("event", ""))
-                
+                payload = data.get("data") if isinstance(data.get("data"), dict) else {}
+
                 if event_type == SARVAM_EVENT_CONNECTED:
                     logger.debug("Sarvam session started")
-                    
-                elif event_type == SARVAM_EVENT_PARTIAL:
+
+                elif event_type in (SARVAM_EVENT_PARTIAL, "partial_transcript"):
                     # Interim/partial transcription
-                    text = data.get("text", data.get("transcript", ""))
-                    if text:
+                    text = (
+                        data.get("text")
+                        or data.get("transcript")
+                        or payload.get("text")
+                        or payload.get("transcript")
+                        or data.get("payload", "")
+                    )
+                    if text and event_type != "error":
                         transcription = Transcription(
                             message=text,
                             confidence=data.get("confidence", 0.0),
                             is_final=False,
                         )
                         self.produce_nonblocking(transcription)
-                        
-                elif event_type == SARVAM_EVENT_TRANSCRIPT:
+
+                elif event_type in (SARVAM_EVENT_TRANSCRIPT, "final_transcript"):
                     # Final transcription
-                    text = data.get("text", data.get("transcript", ""))
-                    if text:
+                    text = (
+                        data.get("text")
+                        or data.get("transcript")
+                        or payload.get("text")
+                        or payload.get("transcript")
+                        or data.get("payload", "")
+                    )
+                    if text and event_type != "error":
                         transcription = Transcription(
                             message=text,
                             confidence=data.get("confidence", 1.0),
@@ -184,12 +236,21 @@ class SarvamTranscriber(BaseAsyncTranscriber[SarvamTranscriberConfig]):
                             duration_seconds=data.get("duration"),
                         )
                         self.produce_nonblocking(transcription)
-                        
+
                 elif event_type == SARVAM_EVENT_ERROR:
                     error_msg = data.get("message", data.get("error", "Unknown error"))
                     logger.error(f"Sarvam error: {error_msg}")
                     
             except asyncio.CancelledError:
+                break
+            except ConnectionClosedOK:
+                break
+            except ConnectionClosedError as e:
+                if e.code == 1003 and "Rate limit exceeded" in str(e):
+                    logger.error("Sarvam rate limit exceeded; ending transcriber loop")
+                    self._ended = True
+                else:
+                    logger.error(f"Error receiving from Sarvam: {e}")
                 break
             except Exception as e:
                 logger.error(f"Error receiving from Sarvam: {e}")

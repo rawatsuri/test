@@ -1,3 +1,5 @@
+from loguru import logger
+
 from vocode.streaming.models.transcriber import (
     AssemblyAITranscriberConfig,
     AzureTranscriberConfig,
@@ -15,7 +17,6 @@ from vocode.streaming.transcriber.deepgram_transcriber import DeepgramTranscribe
 from vocode.streaming.transcriber.gladia_transcriber import GladiaTranscriber
 from vocode.streaming.transcriber.google_transcriber import GoogleTranscriber
 from vocode.streaming.transcriber.rev_ai_transcriber import RevAITranscriber
-from vocode.streaming.transcriber.sarvam_transcriber import SarvamTranscriber
 
 
 class DefaultTranscriberFactory(AbstractTranscriberFactory):
@@ -36,7 +37,20 @@ class DefaultTranscriberFactory(AbstractTranscriberFactory):
         elif isinstance(transcriber_config, GladiaTranscriberConfig):
             return GladiaTranscriber(transcriber_config)
         elif isinstance(transcriber_config, SarvamTranscriberConfig):
-            return SarvamTranscriber(transcriber_config)
+            # Hard fallback: use Deepgram STT when Sarvam STT is unstable.
+            logger.warning("Sarvam transcriber requested; forcing Deepgram fallback transcriber")
+            deepgram_config = DeepgramTranscriberConfig(
+                sampling_rate=transcriber_config.sampling_rate,
+                audio_encoding=transcriber_config.audio_encoding,
+                chunk_size=transcriber_config.chunk_size,
+                endpointing_config=transcriber_config.endpointing_config,
+                downsampling=transcriber_config.downsampling,
+                min_interrupt_confidence=transcriber_config.min_interrupt_confidence,
+                mute_during_speech=transcriber_config.mute_during_speech,
+                language="hi",
+                model="nova-2",
+            )
+            return DeepgramTranscriber(deepgram_config)
         else:
             raise Exception("Invalid transcriber config")
 

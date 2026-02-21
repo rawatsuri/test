@@ -28,6 +28,19 @@ from vocode.streaming.telephony.server.router.calls import CallsRouter
 from vocode.streaming.utils import create_conversation_id
 
 
+def _normalize_indic_language(language: Optional[str], default: str = "hi-IN") -> str:
+    if not language:
+        return default
+    value = language.strip()
+    if not value:
+        return default
+    normalized = value.replace("_", "-")
+    if "-" in normalized:
+        return normalized
+    # Map bare language code to Indian locale code.
+    return f"{normalized.lower()}-IN"
+
+
 def _normalize_base_url(value: Optional[str]) -> str:
     if not value:
         # Render typically provides this for web services.
@@ -151,9 +164,10 @@ async def create_conversation(
 
     stt_provider = payload.stt_provider.lower()
     if stt_provider == "sarvam":
+        sarvam_language = _normalize_indic_language(payload.language, default="hi-IN")
         transcriber_config = SarvamTranscriberConfig.from_telephone_input_device(
             endpointing_config=PunctuationEndpointingConfig(),
-            language=payload.language or "hi-IN",
+            language=sarvam_language,
             api_key=payload.stt_api_key,
         )
     else:
@@ -179,11 +193,12 @@ async def create_conversation(
             model_id=None,
         )
     elif tts_provider == "sarvam":
+        sarvam_language = _normalize_indic_language(payload.language, default="hi-IN")
         synthesizer_config = SarvamSynthesizerConfig(
             sampling_rate=TwilioCallConfig.default_synthesizer_config().sampling_rate,
             audio_encoding=TwilioCallConfig.default_synthesizer_config().audio_encoding,
             api_key=payload.tts_api_key,
-            target_language_code=payload.language or "hi-IN",
+            target_language_code=sarvam_language,
         )
     else:
         # Default to Azure. Requires AZURE_SPEECH_KEY/AZURE_SPEECH_REGION if used at runtime.

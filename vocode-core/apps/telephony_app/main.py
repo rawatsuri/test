@@ -2,6 +2,7 @@
 import os
 import sys
 from urllib.parse import urlparse
+from pathlib import Path
 
 from dotenv import load_dotenv
 
@@ -16,13 +17,14 @@ from speller_agent import SpellerAgentFactory
 from vocode.logging import configure_pretty_logging
 from vocode.streaming.models.agent import ChatGPTAgentConfig
 from vocode.streaming.models.message import BaseMessage
+from vocode.streaming.models.synthesizer import AzureSynthesizerConfig, SarvamSynthesizerConfig
 from vocode.streaming.models.telephony import TwilioConfig
+from vocode.streaming.models.transcriber import DeepgramTranscriberConfig, TimeEndpointingConfig
 from vocode.streaming.telephony.config_manager.redis_config_manager import RedisConfigManager
 from vocode.streaming.telephony.server.base import TelephonyServer, TwilioInboundCallConfig
 
-# if running from python, this will load the local .env
-# docker-compose will load the .env file by itself
-load_dotenv()
+# Always load .env colocated with this app entrypoint.
+load_dotenv(dotenv_path=Path(__file__).with_name(".env"))
 
 configure_pretty_logging()
 
@@ -104,9 +106,20 @@ telephony_server = TelephonyServer(
         TwilioInboundCallConfig(
             url="/inbound_call",
             agent_config=ChatGPTAgentConfig(
-                initial_message=BaseMessage(text="What up"),
-                prompt_preamble="Have a pleasant conversation about life",
+                initial_message=BaseMessage(text="Namaste, main sun raha hoon."),
+                prompt_preamble=(
+                    "You are a real-time phone AI assistant for India. "
+                    "Reply in caller language (Hindi/English/Hinglish). "
+                    "One sentence only, max 8 words. "
+                    "No extra follow-up question unless user asks."
+                ),
                 generate_responses=True,
+                model_name="gpt-4o-mini",
+                temperature=0.1,
+                max_tokens=32,
+                interrupt_sensitivity="high",
+                send_filler_audio=False,
+                end_conversation_on_goodbye=True,
             ),
             # uncomment this to use the speller agent instead
             # agent_config=SpellerAgentConfig(
@@ -118,6 +131,25 @@ telephony_server = TelephonyServer(
             twilio_config=TwilioConfig(
                 account_sid=os.environ["TWILIO_ACCOUNT_SID"],
                 auth_token=os.environ["TWILIO_AUTH_TOKEN"],
+            ),
+            transcriber_config=DeepgramTranscriberConfig.from_telephone_input_device(
+                endpointing_config=TimeEndpointingConfig(time_cutoff_seconds=0.22),
+                language="hi",
+                model="nova-2",
+                api_key=os.environ.get("DEEPGRAM_API_KEY"),
+            ),
+            synthesizer_config=(
+                AzureSynthesizerConfig.from_telephone_output_device(
+                    voice_name="hi-IN-SwaraNeural",
+                    language_code="hi-IN",
+                    rate=28,
+                    pitch=0,
+                )
+                if bool(os.getenv("AZURE_SPEECH_KEY")) and bool(os.getenv("AZURE_SPEECH_REGION"))
+                else SarvamSynthesizerConfig.from_telephone_output_device(
+                    model="bulbul:v3",
+                    target_language_code="hi-IN",
+                )
             ),
         )
     ],
