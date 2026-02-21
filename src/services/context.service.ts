@@ -23,6 +23,7 @@ export interface VocodeContext {
   sttProvider: string;
   ttsProvider: string;
   llmProvider: string;
+  llmModel: string;
   sttApiKey?: string;
   ttsApiKey?: string;
   llmApiKey?: string;
@@ -125,6 +126,7 @@ export class ContextService {
         sttProvider: agentConfig.sttProvider,
         ttsProvider: agentConfig.ttsProvider,
         llmProvider: agentConfig.llmProvider,
+        llmModel: agentConfig.llmModel,
         sttApiKey: decryptedKeys?.stt,
         ttsApiKey: decryptedKeys?.tts,
         llmApiKey: decryptedKeys?.llm,

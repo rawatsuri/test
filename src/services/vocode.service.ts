@@ -34,6 +34,7 @@ export class VocodeService {
     sttProvider: string;
     ttsProvider: string;
     llmProvider: string;
+    llmModel?: string;
     sttApiKey?: string;
     ttsApiKey?: string;
     llmApiKey?: string;
@@ -53,6 +54,7 @@ export class VocodeService {
         stt_provider: config.sttProvider.toLowerCase(),
         tts_provider: config.ttsProvider.toLowerCase(),
         llm_provider: config.llmProvider.toLowerCase(),
+        llm_model: config.llmModel,
         stt_api_key: config.sttApiKey,
         tts_api_key: config.ttsApiKey,
         llm_api_key: config.llmApiKey,

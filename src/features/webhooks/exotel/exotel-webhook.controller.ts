@@ -103,6 +103,7 @@ export class ExotelWebhookController {
         sttProvider: contextResult.context.sttProvider,
         ttsProvider: contextResult.context.ttsProvider,
         llmProvider: contextResult.context.llmProvider,
+        llmModel: contextResult.context.llmModel,
         sttApiKey: contextResult.context.sttApiKey,
         ttsApiKey: contextResult.context.ttsApiKey,
         llmApiKey: contextResult.context.llmApiKey,

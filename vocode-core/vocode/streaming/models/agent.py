@@ -135,6 +135,7 @@ class ChatGPTAgentConfig(AgentConfig, type=AgentType.CHAT_GPT.value):  # type: i
 
 
 class AnthropicAgentConfig(AgentConfig, type=AgentType.ANTHROPIC.value):  # type: ignore
+    anthropic_api_key: Optional[str] = None
     prompt_preamble: str
     model_name: str = CHAT_ANTHROPIC_DEFAULT_MODEL_NAME
     max_tokens: int = LLM_AGENT_DEFAULT_MAX_TOKENS
