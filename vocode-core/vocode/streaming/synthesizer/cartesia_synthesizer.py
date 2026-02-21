@@ -163,17 +163,14 @@ class CartesiaSynthesizer(BaseSynthesizer[CartesiaSynthesizerConfig]):
         async def chunk_generator(context):
             buffer = bytearray()
             if context.is_closed():
+                logger.error("[Cartesia TTS] Context is immediately closed upon creation.")
                 return
             try:
+                logger.info(f"[Cartesia TTS] Awaiting audio chunks for transcript: '{transcript}'")
                 async for event in context.receive():
                     audio = event.get("audio")
                     word_timestamps = event.get("word_timestamps")
-                    if word_timestamps:
-                        words = word_timestamps["words"]
-                        start_times = word_timestamps["start"]
-                        end_times = word_timestamps["end"]
-                        for word, start, end in zip(words, start_times, end_times):
-                            self.ctx_timestamps.append((word, start, end))
+                    
                     if audio:
                         buffer.extend(audio)
                         while len(buffer) >= chunk_size:
@@ -181,11 +178,25 @@ class CartesiaSynthesizer(BaseSynthesizer[CartesiaSynthesizerConfig]):
                                 chunk=buffer[:chunk_size], is_last_chunk=False
                             )
                             buffer = buffer[chunk_size:]
+                            
+                    if word_timestamps:
+                        words = word_timestamps["words"]
+                        start_times = word_timestamps["start"]
+                        end_times = word_timestamps["end"]
+                        for word, start, end in zip(words, start_times, end_times):
+                            self.ctx_timestamps.append((word, start, end))
+                            
+                    # Optionally log connection closure events or errors from Cartesia
+                    if "error" in event:
+                        logger.error(f"[Cartesia TTS API Error]: {event['error']}")
+                        
             except Exception as e:
-                logger.info(
-                    f"Caught error while receiving audio chunks from CartesiaSynthesizer: {e}"
+                logger.error(
+                    f"[Cartesia TTS] Caught CRITICAL error while receiving audio chunks: {e}", exc_info=True
                 )
                 self.ctx._close()
+                
+            logger.info("[Cartesia TTS] Finished receiving stream. Flushing buffer.")
             if buffer:
                 # pad the leftover buffer with silence
                 if len(buffer) < chunk_size:
@@ -195,6 +206,8 @@ class CartesiaSynthesizer(BaseSynthesizer[CartesiaSynthesizerConfig]):
                     elif self.output_format["encoding"] == "pcm_s16le":
                         buffer.extend(b"\x00\x00" * padding_size)  # 0 is silence in s16le
                 yield SynthesisResult.ChunkResult(chunk=buffer, is_last_chunk=True)
+            else:
+                yield SynthesisResult.ChunkResult(chunk=b"", is_last_chunk=True)
 
         self.ctx_message.text += transcript
 

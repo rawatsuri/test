@@ -5,9 +5,9 @@ from dotenv import load_dotenv
 
 from vocode.streaming.models.agent import ChatGPTAgentConfig, FillerAudioConfig
 from vocode.streaming.models.message import BaseMessage
-from vocode.streaming.models.synthesizer import SarvamSynthesizerConfig
+from vocode.streaming.models.synthesizer import CartesiaSynthesizerConfig
 from vocode.streaming.models.telephony import TwilioConfig
-from vocode.streaming.models.transcriber import SarvamTranscriberConfig
+from vocode.streaming.models.transcriber import DeepgramTranscriberConfig
 from vocode.streaming.transcriber.deepgram_transcriber import DeepgramEndpointingConfig
 
 load_dotenv()
@@ -19,12 +19,11 @@ BASE_URL = os.environ["BASE_URL"]
 
 # --- Agent Configuration ---
 SYSTEM_PROMPT = """You are a friendly AI voice assistant on a live phone call in India.
-You are speaking with someone who uses Hinglish (a mix of Hindi and English).
 RULES:
 - You CAN hear the caller. You are on a real-time phone call.
 - Keep responses EXTREMELY SHORT, point-to-point. Max 10-15 words.
+- The caller may speak Hinglish, but you MUST write your entire response exclusively in the Devanagari script (Hindi characters). Do not write Romanized Hindi.
 - Answer directly. Do not have long conversations. No filler.
-- Match the caller's language: if they speak Hindi, reply in Hindi. If English, reply in English. If Hinglish, reply in Hinglish.
 - Be conversational and natural, like a real person.
 - If the caller asks to stop, cut, or end the call, you MUST say exactly "Goodbye" or "Bye" at the end of your sentence so the system knows to hang up.
 - Never use emojis, markdown, or special characters.
@@ -63,17 +62,18 @@ async def main():
             account_sid=os.environ["TWILIO_ACCOUNT_SID"],
             auth_token=os.environ["TWILIO_AUTH_TOKEN"],
         ),
-        # Sarvam AI for best Hinglish STT (with auto-fallback to Deepgram)
-        transcriber_config=SarvamTranscriberConfig.from_telephone_input_device(
+        # Deepgram STT for flawless Hinglish transcription
+        transcriber_config=DeepgramTranscriberConfig.from_telephone_input_device(
             endpointing_config=DeepgramEndpointingConfig(),
             min_interrupt_confidence=0.1, # Lowest threshold so ANY human speech bursts cut the AI off
             mute_during_speech=False, # CRITICAL: explicitly ensure microphone isn't muted while AI talks
-            language="hi-IN", # Explicitly set to Hindi/Hinglish
+            language="hi", # Explicitly set to Hindi/Hinglish
+            model="nova-2"
         ),
-        # Sarvam AI for natural Indian TTS
-        synthesizer_config=SarvamSynthesizerConfig.from_telephone_output_device(
-            model="bulbul:v3",
-            target_language_code="hi-IN",
+        # Cartesia TTS for ultra-low latency true WebSocket streaming
+        synthesizer_config=CartesiaSynthesizerConfig.from_telephone_output_device(
+            model_id="sonic-multilingual",
+            voice_id="79a125e8-cd45-4c13-8a67-188112f4dd22", # An Indian voice from Cartesia
         ),
     )
 

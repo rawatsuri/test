@@ -270,14 +270,27 @@ def _build_agent_config(req: CreateConversationRequest):
     # Common agent behavior params
     use_backchannels = req.use_backchannels or False
     backchannel_probability = req.backchannel_probability or 0.7
-    # FIX: Provide an instant "Haan," (Yes) backchannel filler by default to mask TTS generation latency
-    first_response_filler = req.first_response_filler_message or "Haan,"
+    # Disabled default API-blocking filler so we rely purely on the instant 0-latency FillerAudio backchannel cache
+    first_response_filler = req.first_response_filler_message or None
     interrupt_sensitivity = req.interrupt_sensitivity or "high" # Boosted sensitivity to hear caller over itself
-    # Reverting to False by default so the AI doesn't constantly inject "Acha" mid-sentence.
-    send_filler_audio = req.send_filler_audio or False
+    
+    tts_provider = (req.tts_provider or "").lower()
+    
+    # Enabled to play the cached "Hmm" to mask TTFT latency, but DISABLED for Azure (which spells it verbatim)
+    send_filler_audio = req.send_filler_audio 
+    if send_filler_audio is None:
+        send_filler_audio = False if tts_provider == "azure" else True
+
     initial_message_delay = req.initial_message_delay or 0.0
 
-    filler_audio_config = FillerAudioConfig() if send_filler_audio else None
+    filler_audio_config = FillerAudioConfig(silence_threshold_seconds=0.1) if send_filler_audio else None
+    
+    # Adjust prompt conditionally based on TTS Engine
+    if tts_provider == "azure" and "english" not in prompt_preamble.lower():
+        prompt_preamble += "\n- Default to speaking in pure, natural English (do not use Hinglish slang as you cannot pronounce it correctly)."
+        
+    if tts_provider == "cartesia" and "devanagari" not in prompt_preamble.lower():
+        prompt_preamble += "\n- The caller may speak Hinglish, but you MUST write your entire response exclusively in the Devanagari script (Hindi characters). Do not write Romanized Hindi."
 
     llm = req.llm_provider.lower()
 

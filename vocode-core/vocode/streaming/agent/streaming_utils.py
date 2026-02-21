@@ -6,10 +6,10 @@ from sentry_sdk.tracing import Span
 from vocode.streaming.models.actions import FunctionCall, FunctionFragment
 
 TOKENS_TO_GENERATE_PAST_PERIOD = 3
-SENTENCE_ENDINGS_EXCEPT_PERIOD_PATTERN = r"[?!\n\t\r]"
+SENTENCE_ENDINGS_EXCEPT_PERIOD_PATTERN = r"[?!,\n\t\r]"
 
 
-SHORT_SENTENCE_CUTOFF = 3
+SHORT_SENTENCE_CUTOFF = 2
 
 
 def split_sentences(text: str) -> List[str]:

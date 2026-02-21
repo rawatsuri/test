@@ -46,9 +46,6 @@ class SarvamSynthesizer(BaseSynthesizer[SarvamSynthesizerConfig]):
     async def get_phrase_filler_audios(self) -> list[FillerAudio]:
         filler_phrases = [
             BaseMessage(text="Hmm..."),
-            BaseMessage(text="Haan..."),
-            BaseMessage(text="Acha..."),
-            BaseMessage(text="Theek hai..."),
         ]
         
         filler_audios = []
