@@ -469,6 +469,7 @@ class DeepgramTranscriber(BaseAsyncTranscriber[DeepgramTranscriberConfig]):
                             if words:
                                 words_buffer.extend(words)
                             buffer = f"{buffer} {deepgram_response.top_choice.transcript}"
+                            print(f"[Deepgram STT] FINAL transcript chunk: '{deepgram_response.top_choice.transcript}' (confidence={deepgram_response.top_choice.confidence})")
                             if buffer_avg_confidence == 0:
                                 buffer_avg_confidence = deepgram_response.top_choice.confidence
                             else:
@@ -487,6 +488,7 @@ class DeepgramTranscriber(BaseAsyncTranscriber[DeepgramTranscriberConfig]):
                                 is_final_ts=is_final_ts,
                                 output_ts=output_ts,
                             )
+                            print(f"[Deepgram STT] ENDPOINT DETECTED (time_silent={time_silent:.2f}s). Emitting full phrase: '{buffer.strip()}'")
                             self.produce_nonblocking(
                                 Transcription(
                                     message=buffer,

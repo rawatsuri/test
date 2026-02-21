@@ -1,5 +1,7 @@
 import asyncio
+import time
 from os import getenv
+from typing import Optional
 
 from loguru import logger
 
@@ -22,16 +24,19 @@ from vocode.streaming.transcriber.google_transcriber import GoogleTranscriber
 from vocode.streaming.transcriber.rev_ai_transcriber import RevAITranscriber
 
 
+# ── Sarvam health cache ─────────────────────────────────────────
+# Checked once on first call, then re-checked every 5 minutes.
+_sarvam_health: Optional[bool] = None
+_sarvam_health_ts: float = 0.0
+_HEALTH_TTL_SECONDS = 300  # Re-check every 5 minutes
+
+
 def _sarvam_to_deepgram_fallback(transcriber_config: SarvamTranscriberConfig):
     """
-    Build a Deepgram config that mirrors the Sarvam config for Hindi/Indic STT.
-    Deepgram nova-2 supports Hindi (lang='hi') at 0.78-0.99 confidence.
+    Build a Deepgram config optimized for Hinglish (Hindi-English code-mixing).
+    Uses nova-3 model with 'multi' language — Deepgram's nova-3 handles
+    Hinglish code-switching natively.
     """
-    lang = getattr(transcriber_config, "language", None) or "hi"
-    # Strip region code for Deepgram (e.g. "hi-IN" -> "hi")
-    if lang and "-" in lang:
-        lang = lang.split("-")[0]
-
     deepgram_config = DeepgramTranscriberConfig(
         sampling_rate=transcriber_config.sampling_rate,
         audio_encoding=transcriber_config.audio_encoding,
@@ -40,10 +45,65 @@ def _sarvam_to_deepgram_fallback(transcriber_config: SarvamTranscriberConfig):
         downsampling=transcriber_config.downsampling,
         min_interrupt_confidence=transcriber_config.min_interrupt_confidence,
         mute_during_speech=transcriber_config.mute_during_speech,
-        language=lang,
-        model="nova-2",
+        language="multi",
+        model="nova-3",
     )
     return deepgram_config
+
+
+def _check_sarvam_sync(config: SarvamTranscriberConfig) -> bool:
+    """
+    Synchronous Sarvam health check. Runs in a background thread
+    to avoid async event loop conflicts. Returns True if healthy.
+    """
+    import json
+    import threading
+
+    result = {"healthy": False}
+
+    def _check():
+        import asyncio as _asyncio
+
+        async def _do_check():
+            try:
+                import websockets
+                from vocode.streaming.transcriber.sarvam_transcriber import (
+                    SarvamTranscriber,
+                )
+
+                url = (
+                    f"{SarvamTranscriber.SARVAM_WS_URL}"
+                    f"?sample_rate=16000&mode={SarvamTranscriber.SARVAM_MODE}"
+                    f"&input_audio_codec=pcm_s16le"
+                    f"&language-code={config.language or 'hi-IN'}"
+                    f"&model={SarvamTranscriber.SARVAM_MODEL}"
+                )
+                api_key = config.api_key or getenv("SARVAM_API_KEY", "")
+                headers = {"api-subscription-key": api_key}
+
+                async with websockets.connect(
+                    url, additional_headers=headers, open_timeout=3
+                ) as ws:
+                    silence = b"\x00" * 3200
+                    for _ in range(3):
+                        await ws.send(silence)
+                    try:
+                        msg = await _asyncio.wait_for(ws.recv(), timeout=2.0)
+                        data = json.loads(msg)
+                        if data.get("type") == "error":
+                            return False
+                        return True
+                    except _asyncio.TimeoutError:
+                        return True  # No error = healthy
+            except Exception:
+                return False
+
+        result["healthy"] = _asyncio.run(_do_check())
+
+    t = threading.Thread(target=_check, daemon=True)
+    t.start()
+    t.join(timeout=5)  # Max 5s total
+    return result["healthy"]
 
 
 class DefaultTranscriberFactory(AbstractTranscriberFactory):
@@ -70,78 +130,27 @@ class DefaultTranscriberFactory(AbstractTranscriberFactory):
 
     def _create_sarvam_or_fallback(self, transcriber_config: SarvamTranscriberConfig):
         """
-        Try to create a Sarvam transcriber. If Sarvam STT API is unhealthy
-        (returning pipeline errors or connection failures), automatically
-        fall back to Deepgram nova-2 with Hindi language support.
+        Production-ready Sarvam STT with automatic Deepgram fallback.
 
-        This ensures callers never experience dead silence due to a
-        provider outage while still using Sarvam when it's available.
+        - Health-checks Sarvam once, caches result for 5 minutes
+        - If Sarvam is healthy -> SarvamTranscriber
+        - If Sarvam is down -> Deepgram nova-2 Hindi (handles Hinglish)
+        - Auto-recovers when Sarvam comes back online
         """
-        # Quick health check
-        try:
-            healthy = asyncio.get_event_loop().run_until_complete(
-                self._check_sarvam_health(transcriber_config)
-            )
-        except RuntimeError:
-            try:
-                healthy = asyncio.run(self._check_sarvam_health(transcriber_config))
-            except Exception as e:
-                logger.warning(f"Sarvam health check failed ({e}); using Deepgram fallback")
-                healthy = False
+        global _sarvam_health, _sarvam_health_ts
 
-        if healthy:
+        now = time.time()
+        if _sarvam_health is None or (now - _sarvam_health_ts) > _HEALTH_TTL_SECONDS:
+            logger.info("Running Sarvam STT health check...")
+            _sarvam_health = _check_sarvam_sync(transcriber_config)
+            _sarvam_health_ts = now
+            logger.info(f"Sarvam STT health: {'HEALTHY' if _sarvam_health else 'UNAVAILABLE'}")
+
+        if _sarvam_health:
             from vocode.streaming.transcriber.sarvam_transcriber import SarvamTranscriber
-            logger.info("Sarvam STT health check passed - using SarvamTranscriber")
-            print("[STT] Using: Sarvam STT (healthy)")
+            print("[STT] Provider: Sarvam STT (healthy)")
             return SarvamTranscriber(transcriber_config)
         else:
-            logger.warning(
-                "Sarvam STT is currently unavailable - using Deepgram nova-2 "
-                "with Hindi support as fallback. Sarvam will be used automatically "
-                "once their API recovers."
-            )
-            print("[STT] Using: Deepgram nova-2 (Sarvam unavailable)")
+            print("[STT] Provider: Deepgram nova-2 Hindi (Sarvam unavailable)")
             fallback_config = _sarvam_to_deepgram_fallback(transcriber_config)
             return DeepgramTranscriber(fallback_config)
-
-    async def _check_sarvam_health(self, config: SarvamTranscriberConfig) -> bool:
-        """
-        Quick connectivity + pipeline check against Sarvam STT.
-        Returns True if Sarvam is healthy, False otherwise.
-        """
-        try:
-            import json
-            import websockets
-            from vocode.streaming.transcriber.sarvam_transcriber import SarvamTranscriber
-
-            url = (
-                f"{SarvamTranscriber.SARVAM_WS_URL}"
-                f"?sample_rate=16000&mode={SarvamTranscriber.SARVAM_MODE}"
-                f"&input_audio_codec=pcm_s16le"
-                f"&language-code={config.language or 'hi-IN'}"
-                f"&model={SarvamTranscriber.SARVAM_MODEL}"
-            )
-            api_key = config.api_key or getenv("SARVAM_API_KEY", "")
-            headers = {"api-subscription-key": api_key}
-
-            async with websockets.connect(url, additional_headers=headers) as ws:
-                # Send a small burst of silence
-                silence = b"\x00" * 3200  # 100ms
-                for _ in range(5):
-                    await ws.send(silence)
-
-                # Wait for a response
-                try:
-                    msg = await asyncio.wait_for(ws.recv(), timeout=3.0)
-                    data = json.loads(msg)
-                    if data.get("type") == "error":
-                        err = data.get("data", {}).get("message", "")
-                        logger.warning(f"Sarvam health check got error: {err}")
-                        return False
-                    return True
-                except asyncio.TimeoutError:
-                    # No error = silence was accepted = healthy
-                    return True
-        except Exception as e:
-            logger.warning(f"Sarvam health check exception: {type(e).__name__}: {e}")
-            return False
