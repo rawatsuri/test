@@ -18,7 +18,7 @@ from .model import TypedModel
 
 AZURE_DEFAULT_LANGUAGE = "en-US"
 DEEPGRAM_API_WS_URL = "wss://api.deepgram.com"
-SARVAM_API_WS_URL = "wss://api.sarvam.ai/speech-to-text/ws"
+SARVAM_API_WS_URL = "wss://api.sarvam.ai/speech-to-text-translate/ws"
 
 
 class TranscriberType(str, Enum):
@@ -179,8 +179,8 @@ class SarvamTranscriberConfig(TranscriberConfig, type=TranscriberType.SARVAM.val
     api_key: Optional[str] = None
     ws_url: str = SARVAM_API_WS_URL
     language: Optional[str] = "hi-IN"  # Hindi default; None for auto-detect
-    mode: Optional[str] = None
-    model: str = "saarika:v2.5"
+    mode: Optional[str] = "transcribe"  # transcribe, translate, verbatim, translit, codemix
+    model: str = "saaras:v3"
     # Supported languages: hi-IN, bn-IN, ta-IN, te-IN, kn-IN, ml-IN, mr-IN, gu-IN, pa-IN, or-IN, en-IN
 
 

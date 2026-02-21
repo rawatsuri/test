@@ -1,0 +1,31 @@
+API Key: sk_xgxlmypy_...
+
+=== v3 translate WAV ===
+Connected!
+Sent WAV (64044 bytes)
+RECV: {"type":"error","data":{"message":"Error in Pipeline : 'text'"}}
+CLOSED OK: code=1000
+
+=== v3 translate WAV codec=wav ===
+Connected!
+Sent WAV (64044 bytes)
+RECV: {"type":"error","data":{"message":"Error in Pipeline : 'text'"}}
+CLOSED OK: code=1000
+
+=== v3 translate PCM no-codec ===
+Connected!
+Sent 20 raw PCM chunks
+RECV: {"type":"error","data":{"message":"Error in Pipeline : 'text'"}}
+CLOSED OK: code=1000
+
+=== v3 translate PCM pcm_s16le ===
+Connected!
+Sent 20 raw PCM chunks
+RECV: {"type":"error","data":{"message":"Error in Pipeline : 'text'"}}
+CLOSED OK: code=1000
+
+=== v3 stt WAV ===
+Connected!
+Sent WAV (64044 bytes)
+RECV: {"type":"error","data":{"message":"Error in Pipeline : 'text'"}}
+CLOSED OK: code=1000

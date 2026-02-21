@@ -1,0 +1,35 @@
+API Key: sk_xgxlmypy_...
+
+=== v2.5 translate+transcribe ===
+Connected!
+Sent 20 chunks
+RECV: {"type":"error","data":{"message":"Error in Pipeline : 'text'"}}
+
+=== v3 translate no-mode ===
+Connected!
+Sent 20 chunks
+RECV: {"type":"error","data":{"message":"Error in Pipeline : 'text'"}}
+
+=== v3 translate underscore ===
+Connected!
+Sent 20 chunks
+RECV: {"type":"error","data":{"message":"Error in Pipeline : 'text'"}}
+
+=== v3 translate 8kHz ===
+Connected!
+Sent 20 chunks
+RECV: {"type":"error","data":{"message":"Error in Pipeline : 'text'"}}
+
+=== v3 translate lang=hi ===
+Connected!
+Sent 20 chunks
+RECV: {"type":"error","data":{"message":"Error in Pipeline : 'text'"}}
+
+=== v2.5 stt-only ===
+Connected!
+ERROR: ConnectionClosedError: received 4000 (private use) Invalid model 'saaras:v2.5'. Only 'saarika:v2.5' or 'saaras:v3' are supported.; then sent 4000 (private use) Invalid model 'saaras:v2.5'. Only 'saarika:v2.5' or 'saaras:v3' are supported.
+
+=== v3 no-language ===
+Connected!
+Sent 20 chunks
+RECV: {"type":"error","data":{"message":"Error in Pipeline : 'text'"}}

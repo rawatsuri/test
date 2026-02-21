@@ -1,5 +1,17 @@
 import os
+from pathlib import Path
 from typing import Any, Dict, List, Optional
+
+from dotenv import load_dotenv
+
+# Auto-load .env from telephony_app (same API keys)
+_env_path = Path(__file__).resolve().parent.parent / "telephony_app" / ".env"
+if _env_path.exists():
+    load_dotenv(dotenv_path=_env_path)
+# Also try project-root .env
+_root_env = Path(__file__).resolve().parent.parent.parent.parent / ".env"
+if _root_env.exists():
+    load_dotenv(dotenv_path=_root_env, override=False)
 
 from fastapi import Body, Depends, FastAPI, Header, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
@@ -178,7 +190,8 @@ def _build_transcriber_config(req: CreateConversationRequest):
             endpointing_config=endpointing,
             language=sarvam_lang,
             api_key=req.stt_api_key,
-            model=req.stt_model or "saarika:v2.5",
+            model=req.stt_model or "saaras:v3",
+            mode=getattr(req, 'stt_mode', None) or "transcribe",
         )
 
     if stt == "assembly_ai":

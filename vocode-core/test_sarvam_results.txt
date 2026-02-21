@@ -1,0 +1,27 @@
+API Key: sk_xgxlmypy_...
+
+=== speech-to-text-translate/saaras:v3 ===
+URL: wss://api.sarvam.ai/speech-to-text-translate/ws?sample_rate=16000&input_audio_codec=pcm_s16le&language-code=hi-IN&model=saaras:v3&mode=transcribe
+Connected!
+Sent 20 chunks (2s silence)
+RECV: {"type":"error","data":{"message":"Error in Pipeline : 'text'"}}
+CLOSED OK: code=1000
+
+=== speech-to-text/saaras:v3 ===
+URL: wss://api.sarvam.ai/speech-to-text/ws?sample_rate=16000&input_audio_codec=pcm_s16le&language-code=hi-IN&model=saaras:v3&mode=transcribe
+Connected!
+Sent 20 chunks (2s silence)
+RECV: {"type":"error","data":{"message":"Error in Pipeline : 'text'"}}
+CLOSED OK: code=1000
+
+=== speech-to-text-translate/saarika:v2.5 ===
+URL: wss://api.sarvam.ai/speech-to-text-translate/ws?sample_rate=16000&input_audio_codec=pcm_s16le&language-code=hi-IN&model=saarika:v2.5
+Connected!
+CONNECT ERROR: ConnectionClosedError: received 4000 (private use) Invalid model 'saarika:v2.5'. Only 'saaras:v2.5' and 'saaras:v3' are supported.; then sent 4000 (private use) Invalid model 'saarika:v2.5'. Only 'saaras:v2.5' and 'saaras:v3' are supported.
+
+=== speech-to-text/saarika:v2.5 ===
+URL: wss://api.sarvam.ai/speech-to-text/ws?sample_rate=16000&input_audio_codec=pcm_s16le&language-code=hi-IN&model=saarika:v2.5
+Connected!
+Sent 20 chunks (2s silence)
+RECV: {"type":"error","data":{"message":"Error in Pipeline : 'text'"}}
+CLOSED OK: code=1000
