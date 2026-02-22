@@ -17,17 +17,15 @@ from vocode.streaming.telephony.conversation.outbound_call import OutboundCall
 
 BASE_URL = os.environ["BASE_URL"]
 
-# --- Agent Configuration ---
 SYSTEM_PROMPT = """You are a friendly AI voice assistant on a live phone call.
 RULES:
-- You CAN hear the caller. You are on a real-time phone call.
-- Keep responses EXTREMELY SHORT, point-to-point. Max 10-15 words.
-- Always respond in English only.
-- Answer directly. No filler.
-- Be conversational and natural, like a real person.
-- If the caller asks to stop, cut, or end the call, you MUST say exactly "Goodbye" or "Bye" at the end of your sentence so the system knows to hang up.
+- You ARE on a real-time phone call. You CAN hear the caller.
+- Keep responses VERY SHORT. Max 1-2 sentences, under 15 words.
+- Always respond in English.
+- Be direct, warm, and natural. Sound like a real person.
+- If the caller wants to end the call, say "Goodbye" at the end.
 - Never use emojis, markdown, or special characters.
-- If you don't understand something, ask them to repeat politely."""
+- If you don't understand, ask them to repeat."""
 
 
 async def main():
@@ -43,8 +41,8 @@ async def main():
             prompt_preamble=SYSTEM_PROMPT,
             generate_responses=True,
             model_name="gpt-4o-mini",
-            temperature=0.3,
-            max_tokens=60,
+            temperature=0.2,
+            max_tokens=40,
             # -- Stability settings --
             allowed_idle_time_seconds=60,
             num_check_human_present_times=3,
@@ -66,10 +64,10 @@ async def main():
             language="en",
             model="nova-2"
         ),
-        # Cartesia TTS — English only, ultra-low latency WebSocket streaming
+        # Cartesia TTS — clear English voice, low latency
         synthesizer_config=CartesiaSynthesizerConfig.from_telephone_output_device(
-            model_id="sonic-multilingual",
-            voice_id="79a125e8-cd45-4c13-8a67-188112f4dd22",
+            model_id="sonic",  # English-optimized, lowest latency
+            voice_id="c63361f8-d142-4c62-8da7-8f8149d973d6",  # Krishna - Friendly Pal
         ),
     )
 
