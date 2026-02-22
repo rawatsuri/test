@@ -250,7 +250,7 @@ class CartesiaSynthesizerConfig(SynthesizerConfig, type=SynthesizerType.CARTESIA
 
 # Sarvam AI TTS defaults
 SARVAM_TTS_API_URL = "https://api.sarvam.ai/text-to-speech"
-DEFAULT_SARVAM_MODEL = "bulbul:v2"
+DEFAULT_SARVAM_MODEL = "bulbul:v3"
 DEFAULT_SARVAM_LANGUAGE = "hi-IN"  # Hindi
 
 

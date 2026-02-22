@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 
 from vocode.streaming.models.agent import ChatGPTAgentConfig
 from vocode.streaming.models.message import BaseMessage
-from vocode.streaming.models.synthesizer import CartesiaSynthesizerConfig
+from vocode.streaming.models.synthesizer import SarvamSynthesizerConfig
 from vocode.streaming.models.telephony import TwilioConfig
 from vocode.streaming.models.transcriber import DeepgramTranscriberConfig
 from vocode.streaming.transcriber.deepgram_transcriber import DeepgramEndpointingConfig
@@ -17,17 +17,16 @@ from vocode.streaming.telephony.conversation.outbound_call import OutboundCall
 
 BASE_URL = os.environ["BASE_URL"]
 
-SYSTEM_PROMPT = """You are a friendly AI voice assistant on a live phone call.
+# Keep responses to ONE short sentence to minimize TTS calls
+SYSTEM_PROMPT = """You are a friendly AI voice assistant for Indian customers.
 RULES:
-- You ARE on a real-time phone call. You CAN hear the caller.
-- Keep responses short but complete. 1-3 sentences max.
-- Always respond in clear English.
-- Be warm, helpful, and conversational. Sound like a real person, not robotic.
-- Give useful answers, not just one-word replies.
-- If the caller wants to end the call, say "Goodbye" at the end.
+- You ARE on a live phone call. Keep responses to ONE short sentence only.
+- Respond in Hinglish - mix Hindi and English naturally like Indians talk. Example: "Haan bilkul, main aapki help kar sakta hoon doctor appointment ke liye."
+- Do NOT split your answer into multiple sentences. Give ONE complete thought.
+- Be warm and conversational like an Indian customer service agent.
 - Never use emojis, markdown, or special characters.
-- If you don't understand, ask them to repeat.
-- If asked who made you, created you, or developed you, say you were developed by the team at Solution AI."""
+- If asked who made or developed you, say "Solution AI team ne mujhe develop kiya hai."
+- If caller wants to end call, say "Goodbye" at the end."""
 
 
 async def main():
@@ -35,19 +34,18 @@ async def main():
 
     outbound_call = OutboundCall(
         base_url=BASE_URL,
-        to_phone="+916398912969",  # <-- PUT YOUR PHONE NUMBER HERE
-        from_phone="+19787189580",  # Your Twilio number
+        to_phone="+916398912969",
+        from_phone="+19787189580",
         config_manager=config_manager,
         agent_config=ChatGPTAgentConfig(
-            initial_message=BaseMessage(text="Hello! How are you doing today?"),
+            initial_message=BaseMessage(text="Hello! Kaise hain aap aaj?"),
             prompt_preamble=SYSTEM_PROMPT,
             generate_responses=True,
-            model_name="llama-3.3-70b-versatile",  # Groq: ~200ms inference
+            model_name="llama-3.3-70b-versatile",  # 70B for quality Hinglish
             openai_api_key=os.environ.get("GROQ_API_KEY"),
             base_url_override="https://api.groq.com/openai/v1",
-            temperature=0.2,
-            max_tokens=80,
-            # -- Stability settings --
+            temperature=0.3,
+            max_tokens=50,  # Short — forces single sentence
             allowed_idle_time_seconds=60,
             num_check_human_present_times=3,
             initial_message_delay=0.0,
@@ -63,18 +61,18 @@ async def main():
         ),
         transcriber_config=DeepgramTranscriberConfig.from_telephone_input_device(
             endpointing_config=DeepgramEndpointingConfig(
-                vad_threshold_ms=200,       # Was 500ms — react faster to speech end
-                utterance_cutoff_ms=500,    # Was 1000ms — cut off sooner
+                vad_threshold_ms=200,
+                utterance_cutoff_ms=500,
             ),
             min_interrupt_confidence=0.1,
             mute_during_speech=False,
-            language="en",
+            language="hi",
             model="nova-2"
         ),
-        # Cartesia TTS — clear English voice, low latency
-        synthesizer_config=CartesiaSynthesizerConfig.from_telephone_output_device(
-            model_id="sonic",  # English-optimized, lowest latency
-            voice_id="c63361f8-d142-4c62-8da7-8f8149d973d6",  # Krishna - Friendly Pal
+        # Sarvam TTS — Hindi streaming
+        synthesizer_config=SarvamSynthesizerConfig.from_telephone_output_device(
+            model="bulbul:v3",
+            target_language_code="hi-IN",
         ),
     )
 
