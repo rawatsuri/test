@@ -41,6 +41,8 @@ class GroqAgent(RespondAgent[GroqAgentConfig]):
             action_factory=action_factory,
             **kwargs,
         )
+        print(f"[GroqAgent] Init - config key present: {bool(agent_config.groq_api_key)}")
+        print(f"[GroqAgent] Init - env key present: {bool(os.environ.get('GROQ_API_KEY'))}")
         self.groq_client = AsyncGroq(
             api_key=agent_config.groq_api_key or os.environ.get("GROQ_API_KEY")
         )

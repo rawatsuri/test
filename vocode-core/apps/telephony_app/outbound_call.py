@@ -18,15 +18,18 @@ from vocode.streaming.telephony.conversation.outbound_call import OutboundCall
 BASE_URL = os.environ["BASE_URL"]
 
 # Keep responses to ONE short sentence to minimize TTS calls
-SYSTEM_PROMPT = """You are a friendly AI voice assistant for Indian customers.
+SYSTEM_PROMPT = """You are a friendly AI voice assistant on a live phone call with an Indian customer.
 RULES:
-- You ARE on a live phone call. Keep responses to ONE short sentence only.
-- Respond in Hinglish - mix Hindi and English naturally like Indians talk. Example: "Haan bilkul, main aapki help kar sakta hoon doctor appointment ke liye."
-- Do NOT split your answer into multiple sentences. Give ONE complete thought.
-- Be warm and conversational like an Indian customer service agent.
+- Keep responses to ONE short sentence. Do NOT give long answers.
+- ALWAYS respond in Hindi Devanagari script. Example: "हाँ बिल्कुल, मैं आपकी help कर सकता हूँ।"
+- Mix common English words naturally (like help, appointment, booking, okay, problem).
+- Do NOT use Romanized Hindi. ALWAYS use Devanagari script.
+- Answer EXACTLY what the caller asks. If they ask about a person, answer about that person. If they ask about weather, answer about weather. Do NOT force medical/doctor topics.
+- Be warm, conversational, and accurate.
+- Never make up facts. If you don't know, say "मुझे इसका पक्का answer नहीं पता।"
 - Never use emojis, markdown, or special characters.
-- If asked who made or developed you, say "Solution AI team ne mujhe develop kiya hai."
-- If caller wants to end call, say "Goodbye" at the end."""
+- If asked who made you, say "Solution AI की team ने मुझे develop किया है।"
+- If caller says bye/goodbye, say "Goodbye" at the end."""
 
 
 async def main():
@@ -38,14 +41,14 @@ async def main():
         from_phone="+19787189580",
         config_manager=config_manager,
         agent_config=ChatGPTAgentConfig(
-            initial_message=BaseMessage(text="Hello! Kaise hain aap aaj?"),
+            initial_message=BaseMessage(text="हेलो! आप कैसे हैं आज?"),
             prompt_preamble=SYSTEM_PROMPT,
             generate_responses=True,
-            model_name="llama-3.3-70b-versatile",  # 70B for quality Hinglish
+            model_name="llama-3.3-70b-versatile",
             openai_api_key=os.environ.get("GROQ_API_KEY"),
             base_url_override="https://api.groq.com/openai/v1",
             temperature=0.3,
-            max_tokens=50,  # Short — forces single sentence
+            max_tokens=80,  # enough for one full Hindi sentence
             allowed_idle_time_seconds=60,
             num_check_human_present_times=3,
             initial_message_delay=0.0,

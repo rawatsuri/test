@@ -249,6 +249,7 @@ class RespondAgent(BaseAgent[AgentConfigType]):
         transcription: Transcription,
         agent_input: AgentInput,
     ) -> bool:
+        print(f"[RespondAgent] handle_generate_response entry: {transcription.message}")
         conversation_id = agent_input.conversation_id
         responses = self._maybe_prepend_interrupt_responses(
             transcription=transcription,
@@ -440,7 +441,7 @@ class RespondAgent(BaseAgent[AgentConfigType]):
                     )
                 )
 
-            logger.debug("Responding to transcription")
+            print(f"[BaseAgent] Responding to transcription. generate_responses={self.agent_config.generate_responses}")
             should_stop = False
             if self.agent_config.generate_responses:
                 # TODO (EA): this is quite ugly but necessary to have the agent act properly after an action completes
@@ -463,6 +464,9 @@ class RespondAgent(BaseAgent[AgentConfigType]):
                 return
         except asyncio.CancelledError:
             pass
+        except Exception as e:
+            logger.error(f"❌ Uncaught Exception in BaseAgent.process: {e}", exc_info=True)
+            raise e
 
     def _get_action_config(self, function_name: str) -> Optional[ActionConfig]:
         if self.agent_config.actions is None:

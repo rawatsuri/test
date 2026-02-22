@@ -154,10 +154,16 @@ class ChatGPTAgent(RespondAgent[ChatGPTAgentConfigType]):
         return stream
 
     async def _create_openai_stream(self, chat_parameters: Dict[str, Any]) -> AsyncGenerator:
+        print(f"[ChatGPTAgent] Creating OpenAI stream with parameters: { {k: v for k, v in chat_parameters.items() if k != 'messages'} }")
         if self.agent_config.llm_fallback is not None and self.openai_client.max_retries == 0:
             stream = await self._create_openai_stream_with_fallback(chat_parameters)
         else:
-            stream = await self.openai_client.chat.completions.create(**chat_parameters)
+            try:
+                stream = await self.openai_client.chat.completions.create(**chat_parameters)
+                print("[ChatGPTAgent] Stream created successfully")
+            except Exception as e:
+                logger.error(f"❌ OpenAI/Groq API Error: {type(e).__name__} - {str(e)}")
+                raise e
         return stream
 
     def should_backchannel(self, human_input: str) -> bool:
@@ -187,6 +193,7 @@ class ChatGPTAgent(RespondAgent[ChatGPTAgentConfigType]):
         bot_was_in_medias_res: bool = False,
     ) -> AsyncGenerator[GeneratedResponse, None]:
         assert self.transcript is not None
+        print(f"[ChatGPTAgent] generate_response entering for input: '{human_input}'")
 
         chat_parameters = {}
         if self.agent_config.vector_db_config:
@@ -281,13 +288,13 @@ class ChatGPTAgent(RespondAgent[ChatGPTAgentConfigType]):
             )
             MessageType = LLMToken if using_input_streaming_synthesizer else BaseMessage
             if isinstance(message, str):
-                logger.info(f"[OpenAI LLM Agent] Emitting string token: '{message}'")
+                print(f"[OpenAI LLM Agent] Emitting string token: '{message}'")
                 yield ResponseClass(
                     message=MessageType(text=message),
                     is_interruptible=True,
                 )
             else:
-                logger.info(f"[OpenAI LLM Agent] Emitting object: '{message}'")
+                print(f"[OpenAI LLM Agent] Emitting object: '{message}'")
                 yield ResponseClass(
                     message=message,
                     is_interruptible=True,

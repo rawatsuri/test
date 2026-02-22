@@ -1,521 +1,174 @@
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+from typing import Optional, Dict, Any, List
+import asyncio
 import os
-from pathlib import Path
-from typing import Any, Dict, List, Optional
-
+import uvicorn
 from dotenv import load_dotenv
 
-# Auto-load .env from telephony_app (same API keys)
-_env_path = Path(__file__).resolve().parent.parent / "telephony_app" / ".env"
-if _env_path.exists():
-    load_dotenv(dotenv_path=_env_path)
-# Also try project-root .env
-_root_env = Path(__file__).resolve().parent.parent.parent.parent / ".env"
-if _root_env.exists():
-    load_dotenv(dotenv_path=_root_env, override=False)
-
-from fastapi import Body, Depends, FastAPI, Header, HTTPException, Request
-from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
-from loguru import logger
-from pydantic import BaseModel, Field
-
-from vocode.streaming.models.agent import (
-    AnthropicAgentConfig,
-    ChatGPTAgentConfig,
-    FillerAudioConfig,
-    GroqAgentConfig,
-)
+from vocode.streaming.models.agent import ChatGPTAgentConfig
 from vocode.streaming.models.message import BaseMessage
-from vocode.streaming.models.synthesizer import (
-    AZURE_SYNTHESIZER_DEFAULT_VOICE_NAME,
-    AzureSynthesizerConfig,
-    CartesiaSynthesizerConfig,
-    ElevenLabsSynthesizerConfig,
-    GoogleSynthesizerConfig,
-    PlayHtSynthesizerConfig,
-    SarvamSynthesizerConfig,
-)
-from vocode.streaming.models.telephony import TwilioCallConfig
-from vocode.streaming.models.transcriber import (
-    AssemblyAITranscriberConfig,
-    AzureTranscriberConfig,
-    DeepgramTranscriberConfig,
-    GoogleTranscriberConfig,
-    PunctuationEndpointingConfig,
-    SarvamTranscriberConfig,
-    TimeEndpointingConfig,
-)
-from vocode.streaming.telephony.config_manager.in_memory_config_manager import (
-    InMemoryConfigManager,
-)
+from vocode.streaming.models.synthesizer import SarvamSynthesizerConfig, CartesiaSynthesizerConfig
+from vocode.streaming.models.telephony import TwilioConfig
+from vocode.streaming.models.transcriber import DeepgramTranscriberConfig
+from vocode.streaming.transcriber.deepgram_transcriber import DeepgramEndpointingConfig
+from vocode.streaming.telephony.server.base import TelephonyServer, TwilioInboundCallConfig
 from vocode.streaming.telephony.config_manager.redis_config_manager import RedisConfigManager
-from vocode.streaming.telephony.server.router.calls import CallsRouter
-from vocode.streaming.utils import create_conversation_id
+from vocode.streaming.telephony.conversation.outbound_call import OutboundCall
+from pyngrok import ngrok
+from loguru import logger
+from urllib.parse import urlparse
+import sys
+from pathlib import Path
 
+# Try to load the main backend env
+env_path = Path(__file__).resolve().parent.parent.parent.parent / '.env'
+if env_path.exists():
+    load_dotenv(dotenv_path=env_path)
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
+# Then explicitly load the telephony_app env which contains the specific Voice AI keys 
+telephony_env_path = Path(__file__).resolve().parent.parent / 'telephony_app' / '.env'
+if telephony_env_path.exists():
+    load_dotenv(dotenv_path=telephony_env_path)
 
-def _normalize_indic_language(language: Optional[str], default: str = "hi-IN") -> str:
-    if not language:
-        return default
-    value = language.strip()
-    if not value:
-        return default
-    normalized = value.replace("_", "-")
-    if "-" in normalized:
-        return normalized
-    return f"{normalized.lower()}-IN"
+app = FastAPI()
 
+def _strip_scheme(url_or_host: str) -> str:
+    value = (url_or_host or "").strip()
+    if not value: return ""
+    if "://" not in value: return value
+    return urlparse(value).netloc or value.replace("https://", "").replace("http://", "")
 
-def _normalize_base_url(value: Optional[str]) -> str:
-    if not value:
-        value = os.environ.get("RENDER_EXTERNAL_HOSTNAME") or os.environ.get(
-            "RENDER_INTERNAL_HOSTNAME"
-        )
-    if not value:
-        raise ValueError("BASE_URL (host only) is required (or set RENDER_EXTERNAL_HOSTNAME).")
-    value = value.strip()
-    value = value.removeprefix("https://").removeprefix("http://")
-    return value.rstrip("/")
+def resolve_base_url() -> str:
+    # Hardcoded active ngrok URL provided by user for local E2E testing
+    return "mausolean-theodore-planklike.ngrok-free.dev"
 
+BASE_URL = resolve_base_url()
+redis_config_manager = RedisConfigManager()
 
-def _auth(x_api_key: Optional[str] = Header(default=None, alias="X-API-Key")) -> None:
-    expected = os.environ.get("VOCODE_API_KEY")
-    if not expected:
-        return
-    if not x_api_key or x_api_key != expected:
-        raise HTTPException(status_code=401, detail="Unauthorized")
+# Mount the Telephony Server to handle Twilio's SIP/Stream webhooks
+telephony_server = TelephonyServer(
+    base_url=BASE_URL,
+    config_manager=redis_config_manager,
+    inbound_call_configs=[],
+)
+app.include_router(telephony_server.get_router())
 
-
-def _get_config_manager():
-    if os.environ.get("USE_IN_MEMORY_CONFIG_MANAGER", "").lower() in ("1", "true", "yes"):
-        logger.warning("Using InMemoryConfigManager — NOT suitable for multi-worker production!")
-        return InMemoryConfigManager()
-    return RedisConfigManager()
-
-
-# ---------------------------------------------------------------------------
-# Request / Response Models
-# ---------------------------------------------------------------------------
-
-class CreateConversationRequest(BaseModel):
-    call_id: str
-    tenant_id: str
+class CreateCallRequest(BaseModel):
+    to_phone: str
+    from_phone: str
     system_prompt: str
-    language: str = "en"
-    voice_id: Optional[str] = None
-
-    # Provider selection (super admin controlled)
-    stt_provider: str = "deepgram"
-    tts_provider: str = "azure"
-    llm_provider: str = "openai"
-
-    # Per-tenant API keys (optional, falls back to env vars)
-    stt_api_key: Optional[str] = None
-    tts_api_key: Optional[str] = None
-    llm_api_key: Optional[str] = None
-
-    # ── LLM parameters ──
-    llm_model: Optional[str] = None
-    temperature: Optional[float] = None
-    max_tokens: Optional[int] = None
-
-    # ── STT parameters ──
-    stt_model: Optional[str] = None
-    stt_language: Optional[str] = None
-    endpointing_type: Optional[str] = "time"          # "time" | "punctuation"
-    endpointing_time_cutoff: Optional[float] = 0.22   # seconds
-
-    # ── TTS parameters ──
-    tts_model: Optional[str] = None
-    tts_voice_id: Optional[str] = None                 # provider-specific voice
-    tts_rate: Optional[int] = None                     # Azure speech rate (0-100)
-    tts_pitch: Optional[float] = None                  # Sarvam pitch (-0.75 to 0.75)
-    tts_speed: Optional[float] = None                  # Sarvam pace / PlayHT speed
-    tts_stability: Optional[float] = None              # ElevenLabs stability
-    tts_similarity_boost: Optional[float] = None       # ElevenLabs similarity
-    tts_optimize_latency: Optional[int] = 4            # ElevenLabs streaming (0-4)
-    tts_language_code: Optional[str] = None            # Azure/Google language code
-
-    # ── Agent behavior ──
-    use_backchannels: Optional[bool] = False
-    backchannel_probability: Optional[float] = 0.7
-    first_response_filler_message: Optional[str] = None
-    send_filler_audio: Optional[bool] = False
-    interrupt_sensitivity: Optional[str] = "low"       # "low" | "high"
-    initial_message_delay: Optional[float] = 0.0
-
-    # Telephony metadata
-    provider: str = "twilio"
-    from_phone: Optional[str] = None
-    to_phone: Optional[str] = None
-    provider_call_id: Optional[str] = None
-
-    context: Optional[Dict[str, Any]] = Field(default=None)
-
-
-class CreateConversationResponse(BaseModel):
-    conversation_id: str
-
-
-# ---------------------------------------------------------------------------
-# Provider Config Factory Functions
-# ---------------------------------------------------------------------------
-
-def _build_endpointing_config(req: CreateConversationRequest):
-    """Build endpointing config — time-based by default for lowest latency."""
-    ep_type = (req.endpointing_type or "time").lower()
-    if ep_type == "punctuation":
-        return PunctuationEndpointingConfig(
-            time_cutoff_seconds=req.endpointing_time_cutoff or 0.4,
-        )
-    # Default: time-based with 220ms cutoff for snappy responses
-    return TimeEndpointingConfig(
-        time_cutoff_seconds=req.endpointing_time_cutoff or 0.22,
-    )
-
-
-def _build_transcriber_config(req: CreateConversationRequest):
-    """Build STT transcriber config based on provider selection."""
-    stt = req.stt_provider.lower()
-    endpointing = _build_endpointing_config(req)
-
-    # Universal Barge-In Settings
-    barge_in_confidence = 0.1
-    mute_during_speech = False
-
-    if stt == "sarvam":
-        sarvam_lang = _normalize_indic_language(
-            req.stt_language or req.language, default="hi-IN"
-        )
-        return SarvamTranscriberConfig.from_telephone_input_device(
-            endpointing_config=endpointing,
-            language=sarvam_lang,
-            api_key=req.stt_api_key,
-            model=req.stt_model or "saaras:v3",
-            mode=getattr(req, 'stt_mode', None) or "transcribe",
-            min_interrupt_confidence=barge_in_confidence,
-            mute_during_speech=mute_during_speech,
-        )
-
-    if stt == "assembly_ai":
-        return AssemblyAITranscriberConfig.from_telephone_input_device(
-            endpointing_config=endpointing,
-            end_utterance_silence_threshold_milliseconds=int(
-                (req.endpointing_time_cutoff or 0.22) * 1000
-            ),
-            min_interrupt_confidence=barge_in_confidence,
-            mute_during_speech=mute_during_speech,
-        )
-
-    if stt == "google":
-        return GoogleTranscriberConfig.from_telephone_input_device(
-            endpointing_config=endpointing,
-            language_code=req.stt_language or req.language or "en-US",
-            model=req.stt_model or None,
-            min_interrupt_confidence=barge_in_confidence,
-            mute_during_speech=mute_during_speech,
-        )
-
-    if stt == "azure":
-        return AzureTranscriberConfig.from_telephone_input_device(
-            endpointing_config=endpointing,
-            language=req.stt_language or req.language or "en-US",
-            min_interrupt_confidence=barge_in_confidence,
-            mute_during_speech=mute_during_speech,
-        )
-
-    # Default: Deepgram — best latency + accuracy for telephony
-    dg_lang = req.stt_language or req.language or "multi"
-    dg_model = req.stt_model or "nova-3"
+    greeting: str
     
-    # FIX: Deepgram nova-3 and 'multi' hallucinate Spanish heavily on background noise.
-    # If the requested language is Indian (Hindi/Hinglish/Indian English), force nova-2 + 'hi'
-    if dg_lang.lower().replace("_", "-") in ("hi", "hi-in", "en-in", "hin"):
-        dg_lang = "hi"
-        dg_model = "nova-2"
+    # Models
+    llm_provider: str
+    llm_model: str
+    tts_provider: str
+    stt_provider: str
 
-    return DeepgramTranscriberConfig.from_telephone_input_device(
-        endpointing_config=endpointing,
-        model=dg_model,
-        tier=None,
-        language=dg_lang,
-        api_key=req.stt_api_key,
-        min_interrupt_confidence=barge_in_confidence,
-        mute_during_speech=mute_during_speech,
-    )
-
-
-def _build_agent_config(req: CreateConversationRequest):
-    """Build LLM agent config based on provider selection."""
-    # Resolve greeting and memory from context
-    greeting = None
-    memory_prompt = None
-    if req.context:
-        greeting = req.context.get("greeting")
-        memory_prompt = req.context.get("memoryPrompt")
-
-    prompt_preamble = req.system_prompt.strip()
-    # Inject call termination instructions for all agents
-    termination_instruction = "- If the caller asks to stop, cut, or end the call, you MUST say exactly \"Goodbye\" or \"Bye\" at the end of your sentence so the system knows to hang up."
-    prompt_preamble = f"{prompt_preamble}\n{termination_instruction}"
-
-    if memory_prompt:
-        prompt_preamble = f"{prompt_preamble}\n\nMEMORY CONTEXT:\n{memory_prompt}"
-
-    initial_message = BaseMessage(text=greeting or "Hello!")
-
-    # Common agent behavior params
-    use_backchannels = req.use_backchannels or False
-    backchannel_probability = req.backchannel_probability or 0.7
-    # Disabled default API-blocking filler so we rely purely on the instant 0-latency FillerAudio backchannel cache
-    first_response_filler = req.first_response_filler_message or None
-    interrupt_sensitivity = req.interrupt_sensitivity or "high" # Boosted sensitivity to hear caller over itself
+@app.post("/create_call")
+async def create_call(req: CreateCallRequest):
+    print(f"🚀 Received Request to Call {req.to_phone} from {req.from_phone}")
     
-    tts_provider = (req.tts_provider or "").lower()
+    # 1. Build Agent Config (LLM)
+    max_tokens = 80
+    temperature = 0.3
+    model_name = req.llm_model
     
-    # Enabled to play the cached "Hmm" to mask TTFT latency, but DISABLED for Azure (which spells it verbatim)
-    send_filler_audio = req.send_filler_audio 
-    if send_filler_audio is None:
-        send_filler_audio = False if tts_provider == "azure" else True
-
-    initial_message_delay = req.initial_message_delay or 0.0
-
-    filler_audio_config = FillerAudioConfig(silence_threshold_seconds=0.1) if send_filler_audio else None
-    
-    # Adjust prompt conditionally based on TTS Engine
-    if tts_provider == "azure" and "english" not in prompt_preamble.lower():
-        prompt_preamble += "\n- Default to speaking in pure, natural English (do not use Hinglish slang as you cannot pronounce it correctly)."
-        
-    if tts_provider == "cartesia" and "devanagari" not in prompt_preamble.lower():
-        prompt_preamble += "\n- The caller may speak Hinglish, but you MUST write your entire response exclusively in the Devanagari script (Hindi characters). Do not write Romanized Hindi."
-
-    llm = req.llm_provider.lower()
-
-    if llm == "groq":
-        return GroqAgentConfig(
-            prompt_preamble=prompt_preamble,
-            groq_api_key=req.llm_api_key,
-            initial_message=initial_message,
-            model_name=req.llm_model or "llama3-70b-8192",
-            temperature=req.temperature if req.temperature is not None else 0.1,
-            max_tokens=req.max_tokens or 64,
-            use_backchannels=use_backchannels,
-            backchannel_probability=backchannel_probability,
-            first_response_filler_message=first_response_filler,
-            interrupt_sensitivity=interrupt_sensitivity,
-            send_filler_audio=filler_audio_config,
-            initial_message_delay=initial_message_delay,
+    if req.llm_provider.upper() == "GROQ":
+        if not model_name or "gpt" in model_name: 
+            model_name = "llama-3.3-70b-versatile"
+            
+        from vocode.streaming.models.agent import GroqAgentConfig
+        agent_config = GroqAgentConfig(
+            initial_message=BaseMessage(text=req.greeting),
+            prompt_preamble=req.system_prompt,
+            generate_responses=True,
+            model_name=model_name,
+            groq_api_key=os.environ.get("GROQ_API_KEY"),
+            temperature=temperature,
+            max_tokens=max_tokens,
+            allowed_idle_time_seconds=60,
+            num_check_human_present_times=3,
+            initial_message_delay=0.0,
+            send_filler_audio=False,
+            use_backchannels=True,
+            backchannel_probability=0.8,
+            interrupt_sensitivity="high",
+            end_conversation_on_goodbye=True,
+        )
+    else:
+        base_url_override = None
+        api_key_override = None
+        # Default fallback to ChatGPT Agent for OpenAI or other compatible endpoints
+        agent_config = ChatGPTAgentConfig(
+            initial_message=BaseMessage(text=req.greeting),
+            prompt_preamble=req.system_prompt,
+            generate_responses=True,
+            model_name=model_name,
+            base_url_override=base_url_override,
+            openai_api_key=api_key_override,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            allowed_idle_time_seconds=60,
+            num_check_human_present_times=3,
+            initial_message_delay=0.0,
+            send_filler_audio=False,
+            use_backchannels=True,
+            backchannel_probability=0.8,
+            interrupt_sensitivity="high",
             end_conversation_on_goodbye=True,
         )
 
-    if llm == "anthropic":
-        return AnthropicAgentConfig(
-            prompt_preamble=prompt_preamble,
-            anthropic_api_key=req.llm_api_key,
-            initial_message=initial_message,
-            model_name=req.llm_model or "claude-3-haiku-20240307",
-            temperature=req.temperature if req.temperature is not None else 0.1,
-            max_tokens=req.max_tokens or 64,
-            interrupt_sensitivity=interrupt_sensitivity,
-            send_filler_audio=filler_audio_config,
-            initial_message_delay=initial_message_delay,
-            end_conversation_on_goodbye=True,
-        )
-
-    # Default: OpenAI ChatGPT
-    return ChatGPTAgentConfig(
-        prompt_preamble=prompt_preamble,
-        openai_api_key=req.llm_api_key,
-        initial_message=initial_message,
-        model_name=req.llm_model or "gpt-4o-mini",
-        temperature=req.temperature if req.temperature is not None else 0.1,
-        max_tokens=req.max_tokens or 64,
-        use_backchannels=use_backchannels,
-        backchannel_probability=backchannel_probability,
-        first_response_filler_message=first_response_filler,
-        interrupt_sensitivity=interrupt_sensitivity,
-        send_filler_audio=filler_audio_config,
-        initial_message_delay=initial_message_delay,
-        end_conversation_on_goodbye=True,
+    # 2. Build STT Config
+    transcriber_config = DeepgramTranscriberConfig.from_telephone_input_device(
+        endpointing_config=DeepgramEndpointingConfig(
+            vad_threshold_ms=200,
+            utterance_cutoff_ms=500,
+        ),
+        min_interrupt_confidence=0.1,
+        mute_during_speech=False,
+        language="hi",
+        model="nova-2"
     )
 
-
-def _build_synthesizer_config(req: CreateConversationRequest):
-    """Build TTS synthesizer config based on provider selection."""
-    # Common telephony audio settings from TwilioCallConfig defaults
-    default_synth = TwilioCallConfig.default_synthesizer_config()
-    sampling_rate = default_synth.sampling_rate
-    audio_encoding = default_synth.audio_encoding
-
-    tts = req.tts_provider.lower()
-    voice_id = req.tts_voice_id or req.voice_id
-
-    if tts in ("11labs", "elevenlabs", "eleven_labs"):
-        return ElevenLabsSynthesizerConfig(
-            sampling_rate=sampling_rate,
-            audio_encoding=audio_encoding,
-            api_key=req.tts_api_key,
-            voice_id=voice_id or "pNInz6obpgDQGcFmaJgB",  # Adam voice
-            optimize_streaming_latency=req.tts_optimize_latency if req.tts_optimize_latency is not None else 4,
-            stability=req.tts_stability,
-            similarity_boost=req.tts_similarity_boost,
-            model_id=req.tts_model or "eleven_turbo_v2_5",
+    # 3. Build TTS Config
+    if req.tts_provider.upper() == "SARVAM":
+        synthesizer_config = SarvamSynthesizerConfig.from_telephone_output_device(
+            model="bulbul:v3",
+            target_language_code="hi-IN",
+            api_key=os.environ.get("SARVAM_API_KEY")
+        )
+    elif req.tts_provider.upper() == "CARTESIA":
+        synthesizer_config = CartesiaSynthesizerConfig.from_telephone_output_device(
+            model_id="sonic-multilingual",
+            voice_id="79a125e8-cd45-4c13-8a67-188112f4dd22", # Friendly Pal
+            language="hi"
+        )
+    else:
+        # Fallback Azure
+        from vocode.streaming.models.synthesizer import AzureSynthesizerConfig
+        synthesizer_config = AzureSynthesizerConfig.from_telephone_output_device(
+            voice_name="hi-IN-SwaraNeural"
         )
 
-    if tts == "sarvam":
-        sarvam_lang = _normalize_indic_language(
-            req.tts_language_code or req.language, default="hi-IN"
-        )
-        return SarvamSynthesizerConfig(
-            sampling_rate=sampling_rate,
-            audio_encoding=audio_encoding,
-            api_key=req.tts_api_key,
-            model=req.tts_model or "bulbul:v2",
-            target_language_code=sarvam_lang,
-            pitch=req.tts_pitch if req.tts_pitch is not None else 0.0,
-            speed=req.tts_speed if req.tts_speed is not None else 1.15,
-            loudness=1.0,
-        )
-
-    if tts == "cartesia":
-        return CartesiaSynthesizerConfig(
-            sampling_rate=sampling_rate,
-            audio_encoding=audio_encoding,
-            api_key=req.tts_api_key,
-            model_id=req.tts_model or "sonic-english",
-            voice_id=voice_id or "f9836c6e-a0bd-460e-9d3c-f7299fa60f94",
-        )
-
-    if tts == "google":
-        return GoogleSynthesizerConfig(
-            sampling_rate=sampling_rate,
-            audio_encoding=audio_encoding,
-            language_code=req.tts_language_code or req.language or "en-US",
-            voice_name=voice_id or "en-US-Neural2-I",
-            speaking_rate=req.tts_speed if req.tts_speed is not None else 1.2,
-            pitch=req.tts_pitch if req.tts_pitch is not None else 0,
-        )
-
-    if tts in ("play_ht", "playht"):
-        return PlayHtSynthesizerConfig(
-            sampling_rate=sampling_rate,
-            audio_encoding=audio_encoding,
-            api_key=req.tts_api_key,
-            voice_id=voice_id or "larry",
-            speed=req.tts_speed,
-            version="2",
-        )
-
-    # Default: Azure — fast, reliable, good for Indian English
-    return AzureSynthesizerConfig(
-        sampling_rate=sampling_rate,
-        audio_encoding=audio_encoding,
-        voice_name=voice_id or AZURE_SYNTHESIZER_DEFAULT_VOICE_NAME,
-        rate=req.tts_rate if req.tts_rate is not None else 28,
-        pitch=int(req.tts_pitch) if req.tts_pitch is not None else 0,
-        language_code=req.tts_language_code or req.language or "en-US",
-    )
-
-
-# ---------------------------------------------------------------------------
-# FastAPI App
-# ---------------------------------------------------------------------------
-
-app = FastAPI(docs_url=None)
-
-BASE_URL = _normalize_base_url(os.environ.get("BASE_URL"))
-config_manager = _get_config_manager()
-
-# Log request validation failures (422) for easier debugging.
-@app.exception_handler(RequestValidationError)
-async def request_validation_exception_handler(
-    request: Request, exc: RequestValidationError
-) -> JSONResponse:
-    try:
-        logger.error(
-            "Request validation error on {} {}: {} | body={}",
-            request.method,
-            request.url.path,
-            exc.errors(),
-            getattr(exc, "body", None),
-        )
-    except Exception:
-        pass
-    return JSONResponse(status_code=422, content={"detail": exc.errors()})
-
-
-# WebSocket endpoint used by Twilio <Connect><Stream url="wss://.../connect_call/{conversationId}">
-app.include_router(CallsRouter(base_url=BASE_URL, config_manager=config_manager).get_router())
-
-
-@app.get("/health")
-def health() -> Dict[str, str]:
-    return {"message": "ok"}
-
-
-@app.post("/conversations", response_model=CreateConversationResponse, dependencies=[Depends(_auth)])
-async def create_conversation(
-    payload: CreateConversationRequest = Body(...)
-) -> CreateConversationResponse:
-    if payload.provider.lower() != "twilio":
-        raise HTTPException(
-            status_code=400,
-            detail="Only provider=twilio is supported by node_bridge right now.",
-        )
-
-    logger.info(
-        "Creating conversation: stt={} tts={} llm={} model={} lang={}",
-        payload.stt_provider,
-        payload.tts_provider,
-        payload.llm_provider,
-        payload.llm_model,
-        payload.language,
-    )
-
-    # Build configs using factory functions
-    transcriber_config = _build_transcriber_config(payload)
-    agent_config = _build_agent_config(payload)
-    synthesizer_config = _build_synthesizer_config(payload)
-
-    conversation_id = create_conversation_id()
-
-    from_phone = payload.from_phone or "unknown"
-    to_phone = payload.to_phone or "unknown"
-    twilio_sid = payload.provider_call_id or payload.call_id or conversation_id
-
-    call_config = TwilioCallConfig(
-        transcriber_config=transcriber_config,
+    # 4. Trigger Outbound Call
+    outbound_call = OutboundCall(
+        base_url=BASE_URL,
+        to_phone=req.to_phone,
+        from_phone=req.from_phone,
+        config_manager=redis_config_manager,
         agent_config=agent_config,
+        telephony_config=TwilioConfig(
+            account_sid=os.environ["TWILIO_ACCOUNT_SID"],
+            auth_token=os.environ["TWILIO_AUTH_TOKEN"],
+        ),
+        transcriber_config=transcriber_config,
         synthesizer_config=synthesizer_config,
-        from_phone=from_phone,
-        to_phone=to_phone,
-        twilio_sid=twilio_sid,
-        twilio_config=None,
-        direction="inbound",
     )
 
-    await config_manager.save_config(conversation_id, call_config)
+    asyncio.create_task(outbound_call.start())
+    return {"status": "success", "message": f"Calling {req.to_phone}..."}
 
-    logger.info(
-        "Conversation {} created successfully (stt={}, tts={}, llm={})",
-        conversation_id,
-        payload.stt_provider,
-        payload.tts_provider,
-        payload.llm_provider,
-    )
-
-    return CreateConversationResponse(conversation_id=conversation_id)
-
-
-@app.post("/conversations/{conversation_id}/end", dependencies=[Depends(_auth)])
-async def end_conversation(conversation_id: str) -> Dict[str, str]:
-    await config_manager.delete_config(conversation_id)
-    return {"status": "ended"}
-
-
-@app.post("/conversations/{conversation_id}/transfer", dependencies=[Depends(_auth)])
-async def transfer_conversation(conversation_id: str) -> Dict[str, str]:
-    raise HTTPException(status_code=501, detail="Transfer not implemented in node_bridge.")
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=8000)

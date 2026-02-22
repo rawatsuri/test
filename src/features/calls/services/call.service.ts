@@ -200,50 +200,45 @@ export class CallService {
     toNumber: string,
   ): Promise<{ success: boolean; call?: Call; error?: string }> {
     try {
-      // Get phone number
+      // 1. Get phone number
       const phoneNumber = await this.prisma.phoneNumber.findFirst({
-        where: {
-          id: phoneNumberId,
-          tenantId,
-        },
+        where: { id: phoneNumberId, tenantId },
       });
 
       if (!phoneNumber) {
         return { success: false, error: 'Phone number not found' };
       }
 
-      // Find or create caller
+      // 2. Find or create caller
       let caller = await this.prisma.caller.findUnique({
-        where: {
-          tenantId_phoneNumber: {
-            tenantId,
-            phoneNumber: toNumber,
-          },
-        },
+        where: { tenantId_phoneNumber: { tenantId, phoneNumber: toNumber } },
+      });
+
+      const tenant = await this.prisma.tenant.findUnique({
+        where: { id: tenantId },
       });
 
       if (!caller) {
-        const tenant = await this.prisma.tenant.findUnique({
-          where: { id: tenantId },
-        });
-
         caller = await this.prisma.caller.create({
           data: {
             tenantId,
             phoneNumber: toNumber,
-            expiresAt: new Date(
-              Date.now() + (tenant?.dataRetentionDays || 15) * 24 * 60 * 60 * 1000,
-            ),
+            expiresAt: new Date(Date.now() + (tenant?.dataRetentionDays || 15) * 24 * 60 * 60 * 1000),
           },
         });
       }
 
-      let externalId = `outbound-${Date.now()}`;
-      if (phoneNumber.provider === 'TWILIO') {
-        externalId = await this.createTwilioOutboundCall(phoneNumber.number, toNumber);
+      // 3. Fetch AI Agent Settings for the Clinic
+      const agentConfig = await this.prisma.agentConfig.findUnique({
+        where: { tenantId },
+      });
+
+      if (!agentConfig) {
+        return { success: false, error: 'AI Agent Configuration not found for this tenant' };
       }
 
-      // Create call record
+      // 4. Create local call record (Pending status until Python confirms)
+      const externalId = `outbound-${Date.now()}`;
       const call = await this.prisma.call.create({
         data: {
           externalId,
@@ -251,12 +246,34 @@ export class CallService {
           phoneNumberId,
           callerId: caller.id,
           direction: 'OUTBOUND',
-          status: 'RINGING',
+          status: 'CONNECTING',
           provider: phoneNumber.provider,
         },
       });
 
-      return { success: true, call };
+      // 5. Trigger Outbound Call via Python AI Node Bridge
+      try {
+        await axios.post('http://127.0.0.1:3000/create_call', {
+          to_phone: toNumber,
+          from_phone: phoneNumber.number,
+          system_prompt: agentConfig.systemPrompt || 'You are a helpful assistant.',
+          greeting: agentConfig.greeting || 'Hello!',
+          llm_provider: agentConfig.llmProvider || 'OPENAI',
+          llm_model: agentConfig.llmModel || 'gpt-4o-mini',
+          tts_provider: agentConfig.ttsProvider || 'AZURE',
+          stt_provider: agentConfig.sttProvider || 'DEEPGRAM'
+        });
+        
+        // Update status to ringing since bridge accepted it
+        await this.updateStatus(call.id, 'RINGING');
+        return { success: true, call };
+
+      } catch (bridgeError) {
+        console.error('❌ Failed to communicate with Python AI Node Bridge:', bridgeError);
+        await this.updateStatus(call.id, 'FAILED');
+        return { success: false, error: 'Failed to start AI conversation engine' };
+      }
+
     } catch (error) {
       console.error('Error triggering outbound call:', error);
       return { success: false, error: 'Failed to trigger outbound call' };
