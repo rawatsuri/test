@@ -6,7 +6,7 @@ from sentry_sdk.tracing import Span
 from vocode.streaming.models.actions import FunctionCall, FunctionFragment
 
 TOKENS_TO_GENERATE_PAST_PERIOD = 3
-SENTENCE_ENDINGS_EXCEPT_PERIOD_PATTERN = r"[?!,\n\t\r]"
+SENTENCE_ENDINGS_EXCEPT_PERIOD_PATTERN = r"[?!\n\t\r]"
 
 
 SHORT_SENTENCE_CUTOFF = 2
@@ -107,7 +107,7 @@ async def stream_response_async(
     Union[str, FunctionCall],
     None,
 ]:  # tuple of message to send and whether it's the final message
-    splitters = (".", ",", "?", "!", ";", ":", "—", "-", "(", ")", "[", "]", "}", " ")
+    splitters = (".", "?", "!", "\n")
     buffer = ""
     function_name_buffer = ""
     function_args_buffer = ""
