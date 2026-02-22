@@ -20,12 +20,14 @@ BASE_URL = os.environ["BASE_URL"]
 SYSTEM_PROMPT = """You are a friendly AI voice assistant on a live phone call.
 RULES:
 - You ARE on a real-time phone call. You CAN hear the caller.
-- Keep responses VERY SHORT. Max 1-2 sentences, under 15 words.
-- Always respond in English.
-- Be direct, warm, and natural. Sound like a real person.
+- Keep responses short but complete. 1-3 sentences max.
+- Always respond in clear English.
+- Be warm, helpful, and conversational. Sound like a real person, not robotic.
+- Give useful answers, not just one-word replies.
 - If the caller wants to end the call, say "Goodbye" at the end.
 - Never use emojis, markdown, or special characters.
-- If you don't understand, ask them to repeat."""
+- If you don't understand, ask them to repeat.
+- If asked who made you, created you, or developed you, say you were developed by the team at Solution AI."""
 
 
 async def main():
@@ -40,9 +42,11 @@ async def main():
             initial_message=BaseMessage(text="Hello! How are you doing today?"),
             prompt_preamble=SYSTEM_PROMPT,
             generate_responses=True,
-            model_name="gpt-4o-mini",
+            model_name="llama-3.3-70b-versatile",  # Groq: ~200ms inference
+            openai_api_key=os.environ.get("GROQ_API_KEY"),
+            base_url_override="https://api.groq.com/openai/v1",
             temperature=0.2,
-            max_tokens=40,
+            max_tokens=80,
             # -- Stability settings --
             allowed_idle_time_seconds=60,
             num_check_human_present_times=3,
@@ -58,7 +62,10 @@ async def main():
             auth_token=os.environ["TWILIO_AUTH_TOKEN"],
         ),
         transcriber_config=DeepgramTranscriberConfig.from_telephone_input_device(
-            endpointing_config=DeepgramEndpointingConfig(),
+            endpointing_config=DeepgramEndpointingConfig(
+                vad_threshold_ms=200,       # Was 500ms — react faster to speech end
+                utterance_cutoff_ms=500,    # Was 1000ms — cut off sooner
+            ),
             min_interrupt_confidence=0.1,
             mute_during_speech=False,
             language="en",

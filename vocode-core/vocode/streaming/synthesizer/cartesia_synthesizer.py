@@ -1,5 +1,6 @@
 import asyncio
 import hashlib
+import time as _time
 from typing import List, Tuple
 
 from loguru import logger
@@ -149,7 +150,7 @@ class CartesiaSynthesizer(BaseSynthesizer[CartesiaSynthesizerConfig]):
         if not message.text.endswith(" "):
             transcript = message.text + " "
 
-        print(f"[Cartesia TTS] Synthesizing: '{message.text}'")
+        print(f"[TIMING] TTS synthesize: '{message.text}' at t={_time.monotonic():.3f}")
         if self.ctx is not None:
             await self.ctx.send(
                 model_id=self.model_id,
@@ -172,12 +173,17 @@ class CartesiaSynthesizer(BaseSynthesizer[CartesiaSynthesizerConfig]):
                 return
             try:
                 total_bytes = 0
+                first_byte_time = None
+                tts_start = _time.monotonic()
                 async for event in context.receive():
                     event_type = getattr(event, "type", None)
                     
                     if event_type == "chunk":
                         audio = event.audio
                         if audio:
+                            if first_byte_time is None:
+                                first_byte_time = _time.monotonic()
+                                print(f"[TIMING] TTS first byte: {(first_byte_time - tts_start)*1000:.0f}ms")
                             total_bytes += len(audio)
                             buffer.extend(audio)
                             while len(buffer) >= chunk_size:
@@ -199,7 +205,8 @@ class CartesiaSynthesizer(BaseSynthesizer[CartesiaSynthesizerConfig]):
                     elif event_type == "done":
                         break
 
-                print(f"[Cartesia TTS] Done ({total_bytes} bytes)")
+                elapsed = (_time.monotonic() - tts_start) * 1000
+                print(f"[TIMING] TTS done: {total_bytes}B in {elapsed:.0f}ms")
             except Exception as e:
                 print(f"[Cartesia TTS] CRITICAL: {e}")
 

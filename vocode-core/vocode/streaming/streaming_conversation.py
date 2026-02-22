@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import time as _time
+
 import asyncio
 import queue
 import random
@@ -307,7 +309,7 @@ class StreamingConversation(AudioPipeline[OutputDeviceType]):
 
                 self.conversation.speed_manager.update(transcription)
 
-                print(f"[PIPELINE] TranscriptionsWorker: Dispatching to LLM agent: '{transcription.message}'")
+                print(f"[TIMING] STT→LLM dispatch: '{transcription.message}' at t={_time.monotonic():.3f}")
                 logger.info("[TranscriptionsWorker] Calling warmup_synthesizer()")
                 self.conversation.warmup_synthesizer()
                 logger.info("[TranscriptionsWorker] Successfully completed warmup_synthesizer(). Queuing TranscriptionAgentInput to LLM.")
@@ -488,7 +490,7 @@ class StreamingConversation(AudioPipeline[OutputDeviceType]):
                     )
                 else:
                     logger.debug("Synthesizing speech for message")
-                    print(f"[PIPELINE] AgentResponsesWorker: Synthesizing speech for: '{agent_response_message.message.text}'")
+                    print(f"[TIMING] LLM→TTS: '{agent_response_message.message.text}' at t={_time.monotonic():.3f}")
                     maybe_synthesis_result = await self.conversation.synthesizer.create_speech(
                         agent_response_message.message,
                         self.chunk_size,
