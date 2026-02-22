@@ -281,11 +281,13 @@ class ChatGPTAgent(RespondAgent[ChatGPTAgentConfigType]):
             )
             MessageType = LLMToken if using_input_streaming_synthesizer else BaseMessage
             if isinstance(message, str):
+                logger.info(f"[OpenAI LLM Agent] Emitting string token: '{message}'")
                 yield ResponseClass(
                     message=MessageType(text=message),
                     is_interruptible=True,
                 )
             else:
+                logger.info(f"[OpenAI LLM Agent] Emitting object: '{message}'")
                 yield ResponseClass(
                     message=message,
                     is_interruptible=True,

@@ -235,6 +235,7 @@ class StreamingConversation(AudioPipeline[OutputDeviceType]):
 
             # ignore utterances during the initial message but still add them to the transcript
             initial_message_ongoing = not self.conversation.initial_message_tracker.is_set()
+            print(f"[PIPELINE] TranscriptionsWorker got: '{transcription.message}' final={transcription.is_final} initial_msg_ongoing={initial_message_ongoing}")
             if initial_message_ongoing or self.should_ignore_utterance(transcription):
                 logger.info(
                     f"Ignoring utterance: {transcription.message}. IMO: {initial_message_ongoing}"
@@ -306,7 +307,10 @@ class StreamingConversation(AudioPipeline[OutputDeviceType]):
 
                 self.conversation.speed_manager.update(transcription)
 
+                print(f"[PIPELINE] TranscriptionsWorker: Dispatching to LLM agent: '{transcription.message}'")
+                logger.info("[TranscriptionsWorker] Calling warmup_synthesizer()")
                 self.conversation.warmup_synthesizer()
+                logger.info("[TranscriptionsWorker] Successfully completed warmup_synthesizer(). Queuing TranscriptionAgentInput to LLM.")
 
                 # we use getattr here to avoid the dependency cycle between PhoneConversation and StreamingConversation
                 event = self.interruptible_event_factory.create_interruptible_event(
@@ -319,7 +323,6 @@ class StreamingConversation(AudioPipeline[OutputDeviceType]):
                     ),
                 )
                 self.consumer.consume_nonblocking(event)
-
     class FillerAudioWorker(InterruptibleWorker[InterruptibleAgentResponseEvent[FillerAudio]]):
         """
         - Waits for a configured number of seconds and then sends filler audio to the output
@@ -485,6 +488,7 @@ class StreamingConversation(AudioPipeline[OutputDeviceType]):
                     )
                 else:
                     logger.debug("Synthesizing speech for message")
+                    print(f"[PIPELINE] AgentResponsesWorker: Synthesizing speech for: '{agent_response_message.message.text}'")
                     maybe_synthesis_result = await self.conversation.synthesizer.create_speech(
                         agent_response_message.message,
                         self.chunk_size,
