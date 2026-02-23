@@ -39,6 +39,7 @@ export const envSchema = z.object({
   VOCODE_STREAM_URL: z.string().url().optional(),
   VOCODE_API_KEY: z.string().optional(),
   INTERNAL_API_SECRET: z.string().min(16).optional(),
+  VOCODE_ACTION_SIGNATURE_SECRET_BASE64: z.string().optional(),
 
   // Exotel (Indian telephony)
   EXOTEL_ACCOUNT_SID: z.string().optional(),

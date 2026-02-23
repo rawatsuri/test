@@ -4,6 +4,7 @@ from typing import Optional, Dict, Any, List
 import asyncio
 import os
 import uvicorn
+import json
 from dotenv import load_dotenv
 
 from vocode.streaming.models.agent import ChatGPTAgentConfig
@@ -15,6 +16,7 @@ from vocode.streaming.transcriber.deepgram_transcriber import DeepgramEndpointin
 from vocode.streaming.telephony.server.base import TelephonyServer, TwilioInboundCallConfig
 from vocode.streaming.telephony.config_manager.redis_config_manager import RedisConfigManager
 from vocode.streaming.telephony.conversation.outbound_call import OutboundCall
+from vocode.streaming.action.execute_external_action import ExecuteExternalActionVocodeActionConfig
 from pyngrok import ngrok
 from loguru import logger
 from urllib.parse import urlparse
@@ -32,6 +34,63 @@ if telephony_env_path.exists():
     load_dotenv(dotenv_path=telephony_env_path)
 
 app = FastAPI()
+
+BOOK_APPOINTMENT_INPUT_SCHEMA = json.dumps(
+    {
+        "type": "object",
+        "properties": {
+            "patient_name": {"type": "string", "description": "Full name of the patient"},
+            "phone_number": {"type": "string", "description": "Patient contact number"},
+            "appointment_date": {"type": "string", "description": "Date in YYYY-MM-DD format"},
+            "appointment_time": {
+                "type": "string",
+                "description": "Time in HH:MM format (24-hour)",
+            },
+            "reason_for_visit": {
+                "type": "string",
+                "description": "Chief complaint or reason for appointment",
+            },
+            "is_new_patient": {"type": "boolean", "description": "Whether this is a new patient"},
+            "urgency": {
+                "type": "string",
+                "enum": ["routine", "urgent", "emergency"],
+                "description": "Urgency level",
+            },
+            "call_id": {"type": "string", "description": "Optional internal call id"},
+        },
+        "required": [
+            "patient_name",
+            "phone_number",
+            "appointment_date",
+            "appointment_time",
+            "reason_for_visit",
+        ],
+    }
+)
+
+BOOK_APPOINTMENT_TOOL_PROMPT = """
+Tool usage policy:
+- If the caller asks to book/schedule an appointment and required details are available,
+  call book_appointment.
+- Required details: patient_name, phone_number, appointment_date, appointment_time, reason_for_visit.
+- If details are missing, ask only for the missing details and then call the function.
+- Do not confirm a booking unless the function result has success=true.
+""".strip()
+
+
+def build_book_appointment_action() -> ExecuteExternalActionVocodeActionConfig:
+    backend_base_url = os.environ.get("BACKEND_BASE_URL", "http://127.0.0.1:5000").rstrip("/")
+    signature_secret = os.environ.get("VOCODE_ACTION_SIGNATURE_SECRET_BASE64", "")
+    return ExecuteExternalActionVocodeActionConfig(
+        processing_mode="muted",
+        name="book_appointment",
+        description="Book a medical appointment for the patient",
+        url=f"{backend_base_url}/api/internal/tools/book-appointment",
+        input_schema=BOOK_APPOINTMENT_INPUT_SCHEMA,
+        speak_on_send=False,
+        speak_on_receive=False,
+        signature_secret=signature_secret,
+    )
 
 def _strip_scheme(url_or_host: str) -> str:
     value = (url_or_host or "").strip()
@@ -68,6 +127,7 @@ class CreateCallRequest(BaseModel):
 
 @app.post("/create_call")
 async def create_call(req: CreateCallRequest):
+    effective_prompt = f"{req.system_prompt}\n\n{BOOK_APPOINTMENT_TOOL_PROMPT}".strip()
     print(f"🚀 Received Request to Call {req.to_phone} from {req.from_phone}")
     
     # 1. Build Agent Config (LLM)
@@ -82,7 +142,7 @@ async def create_call(req: CreateCallRequest):
         from vocode.streaming.models.agent import GroqAgentConfig
         agent_config = GroqAgentConfig(
             initial_message=BaseMessage(text=req.greeting),
-            prompt_preamble=req.system_prompt,
+            prompt_preamble=effective_prompt,
             generate_responses=True,
             model_name=model_name,
             groq_api_key=os.environ.get("GROQ_API_KEY"),
@@ -96,6 +156,7 @@ async def create_call(req: CreateCallRequest):
             backchannel_probability=0.8,
             interrupt_sensitivity="high",
             end_conversation_on_goodbye=True,
+            actions=[build_book_appointment_action()],
         )
     else:
         base_url_override = None
@@ -103,7 +164,7 @@ async def create_call(req: CreateCallRequest):
         # Default fallback to ChatGPT Agent for OpenAI or other compatible endpoints
         agent_config = ChatGPTAgentConfig(
             initial_message=BaseMessage(text=req.greeting),
-            prompt_preamble=req.system_prompt,
+            prompt_preamble=effective_prompt,
             generate_responses=True,
             model_name=model_name,
             base_url_override=base_url_override,
@@ -118,6 +179,7 @@ async def create_call(req: CreateCallRequest):
             backchannel_probability=0.8,
             interrupt_sensitivity="high",
             end_conversation_on_goodbye=True,
+            actions=[build_book_appointment_action()],
         )
 
     # 2. Build STT Config

@@ -33,6 +33,7 @@ import phoneNumberRoutes from './features/phone-numbers/routes/phone-number.rout
 import tenantRoutes from './features/tenant/routes/tenant.routes';
 import userRoutes from './features/tenant-users/routes/user.routes';
 import testRoutes from './features/test/routes/test.routes';
+import internalToolRoutes from './features/tools/internal/routes/tool.routes';
 import exotelWebhookRoutes from './features/webhooks/exotel/exotel.routes';
 import plivoWebhookRoutes from './features/webhooks/plivo/plivo.routes';
 import twilioWebhookRoutes from './features/webhooks/twilio/twilio.routes';
@@ -143,6 +144,7 @@ app.use('/webhooks/exotel', exotelWebhookRoutes);
 app.use('/webhooks/plivo', plivoWebhookRoutes);
 app.use('/webhooks/twilio', twilioWebhookRoutes);
 app.use('/api/internal/calls/:callId', internalCallRoutes);
+app.use('/api/internal/tools', internalToolRoutes);
 
 app.use(apiErrorHandler);
 app.use(unmatchedRoutes);

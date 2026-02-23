@@ -360,3 +360,41 @@ model WebhookLog {
   @@index([provider])
   @@index([createdAt])
 }
+
+// ============================================
+// APPOINTMENTS (Function calling output)
+// ============================================
+
+model Appointment {
+  id              String            @id @default(uuid())
+  referenceCode   String            @unique
+  tenantId        String?
+  callerId        String?
+  callId          String?
+  patientName     String
+  phoneNumber     String
+  appointmentDate String // YYYY-MM-DD
+  appointmentTime String // HH:MM (24-hour)
+  reasonForVisit  String
+  isNewPatient    Boolean           @default(true)
+  urgency         AppointmentUrgency @default(ROUTINE)
+  status          AppointmentStatus  @default(CONFIRMED)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  @@index([tenantId])
+  @@index([phoneNumber])
+  @@index([appointmentDate])
+}
+
+enum AppointmentUrgency {
+  ROUTINE
+  URGENT
+  EMERGENCY
+}
+
+enum AppointmentStatus {
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+}
