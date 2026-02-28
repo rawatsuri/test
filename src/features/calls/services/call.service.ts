@@ -253,7 +253,8 @@ export class CallService {
 
       // 5. Trigger Outbound Call via Python AI Node Bridge
       try {
-        await axios.post('http://127.0.0.1:3000/create_call', {
+        const bridgeBaseUrl = env.VOCODE_BASE_URL.replace(/\/$/, '');
+        await axios.post(`${bridgeBaseUrl}/create_call`, {
           to_phone: toNumber,
           from_phone: phoneNumber.number,
           system_prompt: agentConfig.systemPrompt || 'You are a helpful assistant.',

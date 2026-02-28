@@ -26,12 +26,12 @@ from pathlib import Path
 # Try to load the main backend env
 env_path = Path(__file__).resolve().parent.parent.parent.parent / '.env'
 if env_path.exists():
-    load_dotenv(dotenv_path=env_path)
+    load_dotenv(dotenv_path=env_path, override=True)
 
 # Then explicitly load the telephony_app env which contains the specific Voice AI keys 
 telephony_env_path = Path(__file__).resolve().parent.parent / 'telephony_app' / '.env'
 if telephony_env_path.exists():
-    load_dotenv(dotenv_path=telephony_env_path)
+    load_dotenv(dotenv_path=telephony_env_path, override=True)
 
 app = FastAPI()
 
@@ -41,10 +41,13 @@ BOOK_APPOINTMENT_INPUT_SCHEMA = json.dumps(
         "properties": {
             "patient_name": {"type": "string", "description": "Full name of the patient"},
             "phone_number": {"type": "string", "description": "Patient contact number"},
-            "appointment_date": {"type": "string", "description": "Date in YYYY-MM-DD format"},
+            "appointment_date": {
+                "type": "string",
+                "description": "Date in YYYY-MM-DD format (do not use relative dates like tomorrow/kal)",
+            },
             "appointment_time": {
                 "type": "string",
-                "description": "Time in HH:MM format (24-hour)",
+                "description": "Time in HH:MM format (24-hour, e.g. 14:30)",
             },
             "reason_for_visit": {
                 "type": "string",
@@ -72,9 +75,14 @@ BOOK_APPOINTMENT_TOOL_PROMPT = """
 Tool usage policy:
 - If the caller asks to book/schedule an appointment and required details are available,
   call book_appointment.
-- Required details: patient_name, phone_number, appointment_date, appointment_time, reason_for_visit.
+- Required details:
+  patient_name, phone_number, appointment_date (YYYY-MM-DD),
+  appointment_time (HH:MM 24-hour), reason_for_visit.
 - If details are missing, ask only for the missing details and then call the function.
 - Do not confirm a booking unless the function result has success=true.
+- Do not speak function names, parameter names, JSON, code blocks, or raw tool payloads aloud.
+- Never narrate internal actions like "I am calling book_appointment".
+- After success=true, give one short confirmation and avoid repeated confirmations.
 """.strip()
 
 
@@ -99,8 +107,10 @@ def _strip_scheme(url_or_host: str) -> str:
     return urlparse(value).netloc or value.replace("https://", "").replace("http://", "")
 
 def resolve_base_url() -> str:
-    # Hardcoded active ngrok URL provided by user for local E2E testing
-    return "mausolean-theodore-planklike.ngrok-free.dev"
+    configured = os.environ.get("PUBLIC_WEBHOOK_BASE_URL", "").strip()
+    if configured:
+        return _strip_scheme(configured)
+    return "localhost:5000"
 
 BASE_URL = resolve_base_url()
 redis_config_manager = RedisConfigManager()
@@ -131,10 +141,15 @@ async def create_call(req: CreateCallRequest):
     print(f"🚀 Received Request to Call {req.to_phone} from {req.from_phone}")
     
     # 1. Build Agent Config (LLM)
-    max_tokens = 80
-    temperature = 0.3
+    max_tokens = 180
+    temperature = 0.2
     model_name = req.llm_model
-    
+
+    # Enable actions for all providers by default. Can be disabled explicitly via env.
+    enable_groq_actions = os.environ.get("ENABLE_GROQ_ACTIONS", "true").strip().lower() in ("1", "true", "yes")
+    use_actions = req.llm_provider.upper() != "GROQ" or enable_groq_actions
+    configured_actions = [build_book_appointment_action()] if use_actions else []
+
     if req.llm_provider.upper() == "GROQ":
         if not model_name or "gpt" in model_name: 
             model_name = "llama-3.3-70b-versatile"
@@ -156,7 +171,7 @@ async def create_call(req: CreateCallRequest):
             backchannel_probability=0.8,
             interrupt_sensitivity="high",
             end_conversation_on_goodbye=True,
-            actions=[build_book_appointment_action()],
+            actions=configured_actions,
         )
     else:
         base_url_override = None
@@ -179,7 +194,7 @@ async def create_call(req: CreateCallRequest):
             backchannel_probability=0.8,
             interrupt_sensitivity="high",
             end_conversation_on_goodbye=True,
-            actions=[build_book_appointment_action()],
+            actions=configured_actions,
         )
 
     # 2. Build STT Config
@@ -195,7 +210,7 @@ async def create_call(req: CreateCallRequest):
     )
 
     # 3. Build TTS Config
-    if req.tts_provider.upper() == "SARVAM":
+    if req.tts_provider.upper() == "SARVAM" and os.environ.get("SARVAM_API_KEY"):
         synthesizer_config = SarvamSynthesizerConfig.from_telephone_output_device(
             model="bulbul:v3",
             target_language_code="hi-IN",
@@ -234,3 +249,5 @@ async def create_call(req: CreateCallRequest):
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
+
