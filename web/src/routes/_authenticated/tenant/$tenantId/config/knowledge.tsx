@@ -1,0 +1,155 @@
+import { useState } from 'react'
+import { createFileRoute } from '@tanstack/react-router'
+import { toast } from 'sonner'
+import { useWorkspaceRole } from '@/hooks/use-workspace-role'
+import {
+  useCreateTenantKnowledge,
+  useDeleteTenantKnowledge,
+  useTenantKnowledge,
+} from '@/hooks/tenant/use-tenant-data'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
+
+export const Route = createFileRoute('/_authenticated/tenant/$tenantId/config/knowledge')({
+  component: KnowledgePage,
+})
+
+function KnowledgePage() {
+  const { tenantId } = Route.useParams()
+  const knowledgeQuery = useTenantKnowledge(tenantId)
+  const createKnowledge = useCreateTenantKnowledge(tenantId)
+  const deleteKnowledge = useDeleteTenantKnowledge(tenantId)
+  const { canEditConfig, role } = useWorkspaceRole()
+
+  const [title, setTitle] = useState('')
+  const [category, setCategory] = useState('')
+  const [content, setContent] = useState('')
+
+  const knowledgeItems = knowledgeQuery.data?.data ?? []
+
+  const onSaveItem = () => {
+    if (!canEditConfig) {
+      toast.error(`Role ${role} cannot modify knowledge base`)
+      return
+    }
+    if (!title.trim() || !content.trim()) {
+      toast.error('Title and content are required')
+      return
+    }
+
+    createKnowledge.mutate(
+      {
+        title,
+        category,
+        content,
+      },
+      {
+        onSuccess: () => {
+          toast.success('Knowledge item saved')
+          setTitle('')
+          setCategory('')
+          setContent('')
+        },
+        onError: () => toast.error('Failed to save knowledge item'),
+      },
+    )
+  }
+
+  return (
+    <div className='space-y-6'>
+      <section>
+        <h1 className='text-3xl font-semibold tracking-tight'>Knowledge Base</h1>
+        <p className='text-sm text-muted-foreground'>Keep prompt context grounded in business-specific facts.</p>
+      </section>
+
+      {!canEditConfig ? (
+        <p className='rounded-md border border-amber-500/40 bg-amber-50 p-3 text-sm text-amber-800'>
+          Role {role} has read-only access to knowledge configuration.
+        </p>
+      ) : null}
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Add Knowledge Item</CardTitle>
+        </CardHeader>
+        <CardContent className='space-y-4'>
+          <div className='grid gap-4 sm:grid-cols-2'>
+            <div className='space-y-2'>
+              <Label htmlFor='title'>Title</Label>
+              <Input
+                id='title'
+                value={title}
+                disabled={!canEditConfig}
+                onChange={(event) => setTitle(event.target.value)}
+              />
+            </div>
+            <div className='space-y-2'>
+              <Label htmlFor='category'>Category</Label>
+              <Input
+                id='category'
+                value={category}
+                disabled={!canEditConfig}
+                onChange={(event) => setCategory(event.target.value)}
+              />
+            </div>
+          </div>
+          <div className='space-y-2'>
+            <Label htmlFor='content'>Content</Label>
+            <Textarea
+              id='content'
+              rows={6}
+              value={content}
+              disabled={!canEditConfig}
+              onChange={(event) => setContent(event.target.value)}
+            />
+          </div>
+          <Button disabled={!canEditConfig || createKnowledge.isPending} onClick={onSaveItem}>
+            Save Item
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Knowledge Items</CardTitle>
+          <CardDescription>Current indexed business context.</CardDescription>
+        </CardHeader>
+        <CardContent className='space-y-2'>
+          {knowledgeQuery.isLoading ? <p className='text-sm text-muted-foreground'>Loading knowledge...</p> : null}
+          {knowledgeQuery.isError ? (
+            <p className='text-sm text-destructive'>Failed to load knowledge items.</p>
+          ) : null}
+
+          {knowledgeItems.map((item) => (
+            <div key={item.id} className='flex items-center justify-between rounded-lg border p-3'>
+              <div>
+                <p className='text-sm font-medium'>{item.title}</p>
+                <p className='text-xs text-muted-foreground'>{item.category || 'General'}</p>
+              </div>
+              <Button
+                variant='outline'
+                size='sm'
+                disabled={!canEditConfig || deleteKnowledge.isPending}
+                onClick={() =>
+                  deleteKnowledge.mutate(item.id, {
+                    onSuccess: () => toast.success('Knowledge item removed'),
+                    onError: () => toast.error('Failed to remove knowledge item'),
+                  })
+                }
+              >
+                Remove
+              </Button>
+            </div>
+          ))}
+
+          {!knowledgeQuery.isLoading && !knowledgeQuery.isError && !knowledgeItems.length ? (
+            <p className='text-sm text-muted-foreground'>No knowledge items added yet.</p>
+          ) : null}
+        </CardContent>
+      </Card>
+    </div>
+  )
+}

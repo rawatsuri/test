@@ -1,0 +1,8 @@
+# Pipecat Voice Pipeline Server
+# Dependencies for running voice AI pipelines
+
+fastapi>=0.115.0
+uvicorn[standard]>=0.34.0
+python-dotenv>=1.0.0
+loguru>=0.7.0
+pipecat-ai[silero,deepgram,openai,cartesia,azure,groq,elevenlabs,sarvam,websocket]>=0.0.75

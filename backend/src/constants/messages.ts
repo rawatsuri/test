@@ -1,0 +1,32 @@
+export const SUCCESS = {
+  TENANT_CREATED: 'Tenant created successfully',
+  TENANT_FOUND: 'Tenant found',
+  TENANT_UPDATED: 'Tenant updated successfully',
+  AGENT_CONFIG_UPDATED: 'Agent configuration updated',
+  PHONE_NUMBER_ASSIGNED: 'Phone number assigned to tenant',
+  CALL_CREATED: 'Call record created',
+  CALL_COMPLETED: 'Call completed successfully',
+  CALLER_FOUND: 'Caller found',
+  TRANSCRIPT_SAVED: 'Transcript saved',
+  EXTRACTION_SAVED: 'Extraction saved',
+};
+
+export const ERROR = {
+  INTERNAL_SERVER_ERROR: 'Internal server error',
+  BAD_REQUEST: 'Bad Request',
+  TENANT_NOT_FOUND: 'Tenant not found',
+  TENANT_ALREADY_EXISTS: 'Tenant with this slug already exists',
+  AGENT_CONFIG_NOT_FOUND: 'Agent configuration not found',
+  PHONE_NUMBER_NOT_FOUND: 'Phone number not found',
+  PHONE_NUMBER_ALREADY_ASSIGNED: 'Phone number already assigned to a tenant',
+  CALL_NOT_FOUND: 'Call not found',
+  CALLER_NOT_FOUND: 'Caller not found',
+  INVALID_PROVIDER: 'Invalid telephony provider',
+  WEBHOOK_SIGNATURE_INVALID: 'Webhook signature verification failed',
+  UNAUTHORIZED: 'Unauthorized',
+  FORBIDDEN: 'Forbidden: Insufficient permissions',
+  ROUTE_NOT_FOUND: 'Route not found or wrong API method',
+  PIPECAT_CONNECTION_FAILED: 'Failed to connect to Pipecat service',
+  ORIGIN_HEADER_IS_MISSING: 'Origin header is missing',
+  ACCESS_FORBIDDEN: 'Access forbidden',
+};
