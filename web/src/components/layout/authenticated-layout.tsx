@@ -23,20 +23,13 @@ export function AuthenticatedLayout({ children }: AuthenticatedLayoutProps) {
           <AppSidebar />
           <SidebarInset
             className={cn(
-              // Set content container, so we can use container queries
-              '@container/content',
-
-              // If layout is fixed, set the height
-              // to 100svh to prevent overflow
+              '@container/content bg-gradient-to-b from-background via-background to-muted/20',
               'has-data-[layout=fixed]:h-svh',
-
-              // If layout is fixed and sidebar is inset,
-              // set the height to 100svh - spacing (total margins) to prevent overflow
               'peer-data-[variant=inset]:has-data-[layout=fixed]:h-[calc(100svh-(var(--spacing)*4))]'
             )}
           >
             <AppToolbar />
-            <Main className='space-y-6'>
+            <Main className='space-y-8 pb-10'>
               {children ?? <Outlet />}
             </Main>
           </SidebarInset>

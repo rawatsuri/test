@@ -19,13 +19,18 @@ export function TeamSwitcher({ teams }: TeamSwitcherProps) {
   return (
     <SidebarMenu>
       <SidebarMenuItem>
-        <SidebarMenuButton size='lg'>
-          <div className='flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground'>
+        <SidebarMenuButton
+          size='lg'
+          className='h-auto items-start rounded-xl border border-sidebar-border/60 bg-sidebar-accent/30 px-3 py-3'
+        >
+          <div className='flex aspect-square size-9 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground shadow-sm'>
             <activeTeam.logo className='size-4' />
           </div>
-          <div className='grid flex-1 text-start text-sm leading-tight'>
-            <span className='truncate font-semibold'>{activeTeam.name}</span>
-            <span className='truncate text-xs'>{activeTeam.plan}</span>
+          <div className='grid flex-1 text-start leading-tight'>
+            <span className='truncate text-[11px] font-medium uppercase tracking-[0.18em] text-sidebar-foreground/55'>
+              {activeTeam.plan}
+            </span>
+            <span className='truncate text-sm font-semibold'>{activeTeam.name}</span>
           </div>
         </SidebarMenuButton>
       </SidebarMenuItem>

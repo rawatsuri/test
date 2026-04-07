@@ -1,9 +1,16 @@
-import { useState } from 'react'
-import { createFileRoute } from '@tanstack/react-router'
+import { useMemo, useState } from 'react'
+import { Link, createFileRoute } from '@tanstack/react-router'
+import {
+  ArrowRight,
+  CircleCheckBig,
+  Clock3,
+  Database,
+  Headphones,
+  ShieldAlert,
+} from 'lucide-react'
 import { toast } from 'sonner'
 import { useTenantAgentConfig, useUpdateTenantAgentConfig } from '@/hooks/tenant/use-tenant-data'
 import { useTenant, useUpdateTenant, useUpdateTenantStatus } from '@/hooks/tenants/use-tenants'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -32,122 +39,207 @@ function TenantDetailPage() {
   const [dataRetentionDays, setDataRetentionDays] = useState<number | null>(null)
   const [saveCallRecordings, setSaveCallRecordings] = useState<boolean | null>(null)
 
+  const summaryItems = useMemo(() => {
+    if (!tenant) return []
+
+    return [
+      {
+        label: 'Status',
+        value: tenant.status,
+        icon:
+          tenant.status === TenantStatus.ACTIVE ? (
+            <CircleCheckBig className='size-4 text-emerald-500' />
+          ) : tenant.status === TenantStatus.TRIAL ? (
+            <Clock3 className='size-4 text-amber-500' />
+          ) : (
+            <ShieldAlert className='size-4 text-rose-500' />
+          ),
+      },
+      {
+        label: 'Retention',
+        value: `${tenant.dataRetentionDays} days`,
+        icon: <Database className='size-4 text-primary' />,
+      },
+      {
+        label: 'Recordings',
+        value: tenant.saveCallRecordings ? 'Stored' : 'Disabled',
+        icon: <Headphones className='size-4 text-primary' />,
+      },
+    ]
+  }, [tenant])
+
   if (tenantQuery.isLoading || !tenant) {
-    return <p className='text-sm text-muted-foreground'>Loading tenant...</p>
+    return <p className='text-sm text-muted-foreground'>Loading workspace...</p>
   }
 
   return (
     <div className='space-y-6'>
-      <section className='space-y-1'>
-        <h1 className='text-3xl font-semibold tracking-tight'>{tenant.name}</h1>
-        <p className='text-sm text-muted-foreground'>Tenant ID: {tenant.id}</p>
+      <section className='grid gap-4 xl:grid-cols-[1.35fr_0.85fr]'>
+        <Card className='border-border/70 bg-gradient-to-br from-primary/5 via-background to-background'>
+          <CardHeader className='space-y-4'>
+            <div className='space-y-2'>
+              <p className='text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground'>
+                Workspace admin
+              </p>
+              <div className='space-y-2'>
+                <CardTitle className='text-3xl tracking-tight'>{tenant.name}</CardTitle>
+                <CardDescription className='max-w-2xl text-sm leading-6'>
+                  Control lifecycle, data policy, and runtime defaults for this tenant before
+                  operators work inside the workspace.
+                </CardDescription>
+              </div>
+              <p className='text-xs text-muted-foreground'>Tenant ID: {tenant.id}</p>
+            </div>
+
+            <div className='flex flex-wrap gap-3'>
+              <Button asChild>
+                <Link to='/tenant/$tenantId/dashboard' params={{ tenantId }}>
+                  Open Workspace
+                </Link>
+              </Button>
+              <Button asChild variant='outline'>
+                <Link to='/super-admin/tenants'>Back to Registry</Link>
+              </Button>
+            </div>
+          </CardHeader>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className='text-base'>Workspace summary</CardTitle>
+            <CardDescription>Current status and policy settings at a glance.</CardDescription>
+          </CardHeader>
+          <CardContent className='space-y-3'>
+            {summaryItems.map((item) => (
+              <div
+                key={item.label}
+                className='flex items-center justify-between rounded-xl border border-border/70 px-4 py-3'
+              >
+                <div className='flex items-center gap-3'>
+                  <div className='rounded-lg border border-border/70 p-2'>{item.icon}</div>
+                  <div>
+                    <p className='text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground'>
+                      {item.label}
+                    </p>
+                    <p className='text-sm font-medium'>{item.value}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+            <div className='rounded-xl border border-border/70 bg-muted/20 px-4 py-3 text-xs text-muted-foreground'>
+              Slug: {tenant.slug} · Industry: {tenant.industry} · Plan: {tenant.plan}
+            </div>
+          </CardContent>
+        </Card>
       </section>
 
       <Card>
         <CardHeader>
-          <CardTitle>Workspace Status</CardTitle>
-          <CardDescription>Control access and lifecycle.</CardDescription>
-        </CardHeader>
-        <CardContent className='flex flex-wrap items-center gap-3'>
-          <Badge>{tenant.status}</Badge>
-          <Badge variant='secondary'>{tenant.industry}</Badge>
-          <Button
-            variant='outline'
-            size='sm'
-            onClick={() =>
-              updateStatus.mutate(
-                tenant.status === TenantStatus.ACTIVE
-                  ? TenantStatus.SUSPENDED
-                  : TenantStatus.ACTIVE,
-              )
-            }
-          >
-            {tenant.status === TenantStatus.ACTIVE ? 'Suspend' : 'Activate'}
-          </Button>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Tenant Setup: Business & Retention</CardTitle>
+          <CardTitle>Lifecycle and data policy</CardTitle>
           <CardDescription>
-            Business identity and data handling policies controlled by super admin.
+            Keep business identity, retention, and storage behavior clear for this workspace.
           </CardDescription>
         </CardHeader>
-        <CardContent className='space-y-4'>
-          <div className='space-y-2'>
-            <Label htmlFor='tenant-name'>Workspace Name</Label>
-            <Input
-              id='tenant-name'
-              value={name || tenant.name}
-              onChange={(event) => setName(event.target.value)}
-            />
-          </div>
-          <div className='grid gap-4 sm:grid-cols-2'>
-            <div className='space-y-2'>
-              <Label htmlFor='retention-days'>Data Retention (Days)</Label>
-              <Input
-                id='retention-days'
-                type='number'
-                min={1}
-                max={365}
-                value={dataRetentionDays ?? tenant.dataRetentionDays}
-                onChange={(event) => setDataRetentionDays(Number(event.target.value))}
-              />
-            </div>
-            <div className='flex items-center justify-between rounded-md border p-3'>
-              <div className='space-y-0.5'>
-                <p className='text-sm font-medium'>Save Call Recordings</p>
-                <p className='text-xs text-muted-foreground'>Allow recording storage and download.</p>
+        <CardContent className='space-y-5'>
+          <div className='grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px]'>
+            <div className='space-y-4'>
+              <div className='space-y-2'>
+                <Label htmlFor='tenant-name'>Workspace name</Label>
+                <Input
+                  id='tenant-name'
+                  value={name || tenant.name}
+                  onChange={(event) => setName(event.target.value)}
+                />
               </div>
-              <Switch
-                checked={saveCallRecordings ?? tenant.saveCallRecordings}
-                onCheckedChange={setSaveCallRecordings}
-              />
+
+              <div className='grid gap-4 md:grid-cols-2'>
+                <div className='space-y-2'>
+                  <Label htmlFor='retention-days'>Data retention (days)</Label>
+                  <Input
+                    id='retention-days'
+                    type='number'
+                    min={1}
+                    max={365}
+                    value={dataRetentionDays ?? tenant.dataRetentionDays}
+                    onChange={(event) => setDataRetentionDays(Number(event.target.value))}
+                  />
+                </div>
+
+                <div className='space-y-2'>
+                  <Label>Status</Label>
+                  <Select
+                    value={tenant.status}
+                    onValueChange={(value) => updateStatus.mutate(value as TenantStatus)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value='ACTIVE'>ACTIVE</SelectItem>
+                      <SelectItem value='TRIAL'>TRIAL</SelectItem>
+                      <SelectItem value='SUSPENDED'>SUSPENDED</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </div>
+
+            <div className='rounded-xl border border-border/70 bg-muted/20 p-4'>
+              <div className='flex items-center justify-between gap-4'>
+                <div className='space-y-1'>
+                  <p className='text-sm font-medium'>Store call recordings</p>
+                  <p className='text-xs text-muted-foreground'>
+                    Allow recording persistence and download for this workspace.
+                  </p>
+                </div>
+                <Switch
+                  checked={saveCallRecordings ?? tenant.saveCallRecordings}
+                  onCheckedChange={setSaveCallRecordings}
+                />
+              </div>
             </div>
           </div>
-          <div className='space-y-2'>
-            <Label>Status</Label>
-            <Select
-              value={tenant.status}
-              onValueChange={(value) => updateStatus.mutate(value as TenantStatus)}
+
+          <div className='flex flex-wrap items-center gap-3'>
+            <Button
+              onClick={() =>
+                updateTenant.mutate(
+                  {
+                    name: name || tenant.name,
+                    dataRetentionDays: dataRetentionDays ?? tenant.dataRetentionDays,
+                    saveCallRecordings: saveCallRecordings ?? tenant.saveCallRecordings,
+                  },
+                  {
+                    onSuccess: () => toast.success('Workspace policy saved'),
+                    onError: () => toast.error('Failed to save workspace policy'),
+                  },
+                )
+              }
+              disabled={updateTenant.isPending}
             >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value='ACTIVE'>ACTIVE</SelectItem>
-                <SelectItem value='TRIAL'>TRIAL</SelectItem>
-                <SelectItem value='SUSPENDED'>SUSPENDED</SelectItem>
-              </SelectContent>
-            </Select>
+              Save Policy
+            </Button>
+            <Button
+              variant='outline'
+              onClick={() =>
+                updateStatus.mutate(
+                  tenant.status === TenantStatus.ACTIVE
+                    ? TenantStatus.SUSPENDED
+                    : TenantStatus.ACTIVE,
+                )
+              }
+            >
+              {tenant.status === TenantStatus.ACTIVE ? 'Suspend Workspace' : 'Activate Workspace'}
+            </Button>
           </div>
-          <Button
-            onClick={() =>
-              updateTenant.mutate(
-                {
-                  name: name || tenant.name,
-                  dataRetentionDays: dataRetentionDays ?? tenant.dataRetentionDays,
-                  saveCallRecordings: saveCallRecordings ?? tenant.saveCallRecordings,
-                },
-                {
-                  onSuccess: () => toast.success('Tenant setup saved'),
-                  onError: () => toast.error('Failed to save tenant setup'),
-                },
-              )
-            }
-            disabled={updateTenant.isPending}
-          >
-            Save Tenant Setup
-          </Button>
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle>Tenant Setup: AI Agent (Super Admin Only)</CardTitle>
+          <CardTitle>AI runtime configuration</CardTitle>
           <CardDescription>
-            Control language, provider stack, behavior flags, and prompt strategy for this tenant.
+            Choose the provider stack, prompts, and behavior flags that shape live conversations.
           </CardDescription>
         </CardHeader>
         <CardContent className='space-y-4'>
@@ -162,8 +254,8 @@ function TenantDetailPage() {
               saving={updateConfig.isPending}
               onSave={(payload) =>
                 updateConfig.mutate(payload, {
-                  onSuccess: () => toast.success('AI setup saved'),
-                  onError: () => toast.error('Failed to save AI setup'),
+                  onSuccess: () => toast.success('AI runtime saved'),
+                  onError: () => toast.error('Failed to save AI runtime'),
                 })
               }
             />
@@ -216,44 +308,100 @@ function SuperAdminAgentSetup({
   const [sttProvider, setSttProvider] = useState(config.sttProvider ?? 'DEEPGRAM')
   const [ttsProvider, setTtsProvider] = useState(config.ttsProvider ?? 'ELEVEN_LABS')
   const [llmProvider, setLlmProvider] = useState(config.llmProvider ?? 'OPENAI')
-  const [telephonyProvider, setTelephonyProvider] = useState(config.telephonyProvider ?? 'EXOTEL')
+  const [telephonyProvider, setTelephonyProvider] = useState(
+    config.telephonyProvider ?? 'EXOTEL',
+  )
   const [maxCallDuration, setMaxCallDuration] = useState(config.maxCallDuration ?? 300)
   const [enableMemory, setEnableMemory] = useState(config.enableMemory ?? true)
   const [enableExtraction, setEnableExtraction] = useState(config.enableExtraction ?? true)
   const [enableRecording, setEnableRecording] = useState(config.enableRecording ?? false)
 
   return (
-    <div className='space-y-4'>
-      <div className='space-y-2'>
-        <Label>System Prompt</Label>
-        <Textarea rows={6} value={systemPrompt} onChange={(event) => setSystemPrompt(event.target.value)} />
+    <div className='space-y-5'>
+      <div className='grid gap-5 lg:grid-cols-[minmax(0,1.2fr)_0.8fr]'>
+        <div className='space-y-2'>
+          <Label>System prompt</Label>
+          <Textarea
+            rows={10}
+            value={systemPrompt}
+            onChange={(event) => setSystemPrompt(event.target.value)}
+          />
+        </div>
+        <div className='rounded-xl border border-border/70 bg-muted/20 p-4'>
+          <p className='text-sm font-medium'>Runtime toggles</p>
+          <p className='mt-1 text-xs text-muted-foreground'>
+            Keep only the features that are required for this tenant's production flow.
+          </p>
+          <div className='mt-4 space-y-3'>
+            <FlagToggle title='Memory' checked={enableMemory} onCheckedChange={setEnableMemory} />
+            <FlagToggle
+              title='Extraction'
+              checked={enableExtraction}
+              onCheckedChange={setEnableExtraction}
+            />
+            <FlagToggle
+              title='Recording'
+              checked={enableRecording}
+              onCheckedChange={setEnableRecording}
+            />
+          </div>
+        </div>
       </div>
-      <div className='grid gap-4 sm:grid-cols-2'>
+
+      <div className='grid gap-4 md:grid-cols-2 xl:grid-cols-3'>
         <div className='space-y-2'>
           <Label>Greeting</Label>
           <Input value={greeting} onChange={(event) => setGreeting(event.target.value)} />
         </div>
         <div className='space-y-2'>
-          <Label>Fallback Message</Label>
-          <Input value={fallbackMessage} onChange={(event) => setFallbackMessage(event.target.value)} />
+          <Label>Fallback message</Label>
+          <Input
+            value={fallbackMessage}
+            onChange={(event) => setFallbackMessage(event.target.value)}
+          />
         </div>
-      </div>
-      <div className='grid gap-4 sm:grid-cols-2'>
-        <ProviderSelect label='Language' value={language} onChange={setLanguage} options={['en-IN', 'hi-IN', 'ta-IN', 'te-IN', 'bn-IN']} />
         <div className='space-y-2'>
-          <Label>Max Call Duration (seconds)</Label>
-          <Input type='number' min={60} max={3600} value={maxCallDuration} onChange={(event) => setMaxCallDuration(Number(event.target.value))} />
+          <Label>Max call duration (seconds)</Label>
+          <Input
+            type='number'
+            min={60}
+            max={3600}
+            value={maxCallDuration}
+            onChange={(event) => setMaxCallDuration(Number(event.target.value))}
+          />
         </div>
-        <ProviderSelect label='STT Provider' value={sttProvider} onChange={setSttProvider} options={['DEEPGRAM', 'SARVAM']} />
-        <ProviderSelect label='TTS Provider' value={ttsProvider} onChange={setTtsProvider} options={['ELEVEN_LABS', 'SARVAM', 'GOOGLE']} />
-        <ProviderSelect label='LLM Provider' value={llmProvider} onChange={setLlmProvider} options={['OPENAI', 'GROQ']} />
-        <ProviderSelect label='Telephony Provider' value={telephonyProvider} onChange={setTelephonyProvider} options={['EXOTEL', 'PLIVO', 'TWILIO']} />
+        <ProviderSelect
+          label='Language'
+          value={language}
+          onChange={setLanguage}
+          options={['en-IN', 'hi-IN', 'ta-IN', 'te-IN', 'bn-IN']}
+        />
+        <ProviderSelect
+          label='STT provider'
+          value={sttProvider}
+          onChange={setSttProvider}
+          options={['DEEPGRAM', 'SARVAM']}
+        />
+        <ProviderSelect
+          label='TTS provider'
+          value={ttsProvider}
+          onChange={setTtsProvider}
+          options={['ELEVEN_LABS', 'SARVAM', 'GOOGLE']}
+        />
+        <ProviderSelect
+          label='LLM provider'
+          value={llmProvider}
+          onChange={setLlmProvider}
+          options={['OPENAI', 'GROQ']}
+        />
+        <ProviderSelect
+          label='Telephony provider'
+          value={telephonyProvider}
+          onChange={setTelephonyProvider}
+          options={['EXOTEL', 'PLIVO', 'TWILIO']}
+        />
       </div>
-      <div className='grid gap-3 sm:grid-cols-3'>
-        <FlagToggle title='Memory' checked={enableMemory} onCheckedChange={setEnableMemory} />
-        <FlagToggle title='Extraction' checked={enableExtraction} onCheckedChange={setEnableExtraction} />
-        <FlagToggle title='Recording' checked={enableRecording} onCheckedChange={setEnableRecording} />
-      </div>
+
       <Button
         disabled={saving}
         onClick={() =>
@@ -273,7 +421,8 @@ function SuperAdminAgentSetup({
           })
         }
       >
-        Save AI Setup
+        Save AI Runtime
+        <ArrowRight className='ml-2 size-4' />
       </Button>
     </div>
   )
@@ -319,7 +468,7 @@ function FlagToggle({
   onCheckedChange: (value: boolean) => void
 }) {
   return (
-    <div className='flex items-center justify-between rounded-md border p-3'>
+    <div className='flex items-center justify-between rounded-lg border border-border/70 bg-background px-3 py-2'>
       <p className='text-sm font-medium'>{title}</p>
       <Switch checked={checked} onCheckedChange={onCheckedChange} />
     </div>

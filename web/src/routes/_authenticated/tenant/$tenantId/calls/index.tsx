@@ -2,7 +2,6 @@ import { Link, createFileRoute } from '@tanstack/react-router'
 import { Search } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useTenantCalls } from '@/hooks/tenant/use-tenant-data'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -29,12 +28,11 @@ function CallsListPage() {
     ...(from ? { from } : {}),
     ...(to ? { to } : {}),
   })
-  const callsData = callsQuery.data?.data
+  const callsData = callsQuery.data?.data ?? []
   const pagination = callsQuery.data?.pagination
 
   const filtered = useMemo(() => {
-    const calls = callsData ?? []
-    return calls.filter((call) => {
+    return callsData.filter((call) => {
       const phone = call.caller?.phoneNumber ?? ''
       const name = call.caller?.name ?? ''
       const value = search.toLowerCase()
@@ -42,19 +40,47 @@ function CallsListPage() {
     })
   }, [callsData, search])
 
+  const completedCount = callsData.filter((call) => call.status === 'COMPLETED').length
+  const failedCount = callsData.filter((call) => ['FAILED', 'NO_ANSWER'].includes(call.status)).length
+
   return (
     <div className='space-y-6'>
-      <section>
-        <h1 className='text-3xl font-semibold tracking-tight'>Calls</h1>
-        <p className='text-sm text-muted-foreground'>Review conversations and call outcomes.</p>
+      <section className='grid gap-4 xl:grid-cols-[1.4fr_0.8fr]'>
+        <Card className='border-border/70 bg-gradient-to-br from-primary/5 via-background to-background'>
+          <CardHeader className='space-y-3'>
+            <div className='space-y-2'>
+              <p className='text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground'>
+                Call operations
+              </p>
+              <CardTitle className='text-3xl tracking-tight'>Review conversations without fighting the UI</CardTitle>
+              <CardDescription className='max-w-2xl text-sm leading-6'>
+                Search callers, constrain the date window, and move directly from queue to detail.
+              </CardDescription>
+            </div>
+          </CardHeader>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className='text-base'>Current page</CardTitle>
+            <CardDescription>Counts based on the loaded call slice.</CardDescription>
+          </CardHeader>
+          <CardContent className='grid gap-3 sm:grid-cols-3 xl:grid-cols-1'>
+            <ListStat label='Loaded calls' value={String(callsData.length)} />
+            <ListStat label='Completed' value={String(completedCount)} />
+            <ListStat label='Failed or missed' value={String(failedCount)} />
+          </CardContent>
+        </Card>
       </section>
 
       <Card>
-        <CardHeader>
-          <CardTitle>Call History</CardTitle>
-          <CardDescription>Filter by status/date and search by caller.</CardDescription>
-          <div className='mt-2 grid gap-3 sm:grid-cols-2 lg:grid-cols-5'>
-            <div className='relative sm:col-span-2 lg:col-span-2'>
+        <CardHeader className='space-y-4'>
+          <div>
+            <CardTitle>Conversation list</CardTitle>
+            <CardDescription>Filter by status or date, then search by caller name or phone.</CardDescription>
+          </div>
+          <div className='grid gap-3 lg:grid-cols-[minmax(0,1.4fr)_180px_170px_170px]'>
+            <div className='relative'>
               <Search className='absolute left-3 top-3 size-4 text-muted-foreground' />
               <Input
                 placeholder='Search caller phone or name'
@@ -91,39 +117,53 @@ function CallsListPage() {
             </div>
           </div>
         </CardHeader>
-        <CardContent className='space-y-2'>
+        <CardContent className='space-y-3'>
           {callsQuery.isLoading ? <p className='text-sm text-muted-foreground'>Loading calls...</p> : null}
           {callsQuery.isError ? (
             <p className='text-sm text-destructive'>Failed to load calls. Please refresh.</p>
           ) : null}
+
+          <div className='hidden grid-cols-[minmax(0,1.1fr)_120px_120px_170px_70px] gap-3 border-b pb-3 text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground md:grid'>
+            <span>Caller</span>
+            <span>Status</span>
+            <span>Direction</span>
+            <span>Started</span>
+            <span>Time</span>
+          </div>
 
           {filtered.map((call) => (
             <Link
               key={call.id}
               to='/tenant/$tenantId/calls/$callId'
               params={{ tenantId, callId: call.id }}
-              className='flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3 transition hover:border-primary/40'
+              className='grid gap-3 rounded-xl border border-border/70 px-4 py-4 transition-colors hover:border-primary/40 hover:bg-muted/20 md:grid-cols-[minmax(0,1.1fr)_120px_120px_170px_70px] md:items-center'
             >
-              <div>
-                <p className='text-sm font-medium'>
-                  {call.caller?.name || call.caller?.phoneNumber || 'Unknown Caller'}
+              <div className='min-w-0'>
+                <p className='truncate text-sm font-semibold'>
+                  {call.caller?.name || call.caller?.phoneNumber || 'Unknown caller'}
                 </p>
-                <p className='text-xs text-muted-foreground'>
-                  {new Date(call.startedAt).toLocaleString()} - {call.durationSecs ?? 0}s
+                <p className='truncate text-xs text-muted-foreground'>
+                  {call.caller?.phoneNumber || 'No phone number'} {call.summary ? `· ${call.summary}` : ''}
                 </p>
               </div>
-              <div className='flex items-center gap-2'>
-                <Badge variant='outline'>{call.direction}</Badge>
-                <Badge>{call.status}</Badge>
+              <div className='text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground'>
+                {call.status}
               </div>
+              <div className='text-sm text-muted-foreground'>{call.direction}</div>
+              <div className='text-sm text-muted-foreground'>
+                {new Date(call.startedAt).toLocaleString()}
+              </div>
+              <div className='text-sm font-medium'>{call.durationSecs ?? 0}s</div>
             </Link>
           ))}
 
           {!callsQuery.isLoading && !callsQuery.isError && !filtered.length ? (
-            <p className='text-sm text-muted-foreground'>No calls found.</p>
+            <p className='rounded-xl border border-dashed p-6 text-sm text-muted-foreground'>
+              No calls found for this filter.
+            </p>
           ) : null}
 
-          <div className='mt-4 flex items-center justify-between border-t pt-3'>
+          <div className='flex items-center justify-between border-t pt-4'>
             <p className='text-xs text-muted-foreground'>
               Page {pagination?.page ?? page}
               {pagination?.totalPages ? ` of ${pagination.totalPages}` : ''}
@@ -149,6 +189,15 @@ function CallsListPage() {
           </div>
         </CardContent>
       </Card>
+    </div>
+  )
+}
+
+function ListStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className='rounded-xl border border-border/70 bg-muted/20 px-4 py-3'>
+      <p className='text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground'>{label}</p>
+      <p className='mt-2 text-2xl font-semibold tracking-tight'>{value}</p>
     </div>
   )
 }

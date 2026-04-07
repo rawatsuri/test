@@ -1,7 +1,7 @@
 import {
   BarChart3,
-  Building2,
   Bot,
+  Building2,
   CircleDashed,
   Headphones,
   LayoutDashboard,
@@ -9,6 +9,7 @@ import {
   MessageSquareText,
   Phone,
   Settings2,
+  Sparkles,
   Users,
   Users2,
 } from 'lucide-react'
@@ -23,34 +24,39 @@ export function getSuperAdminSidebarData(): SidebarData {
     },
     teams: [
       {
-        name: 'Omnichannel AI Platform',
+        name: 'Voice Ops',
         logo: Headphones,
-        plan: 'Super Admin',
+        plan: 'Platform',
       },
     ],
     navGroups: [
       {
-        title: 'Control Center',
+        title: 'Platform',
         items: [
           {
-            title: 'Dashboard',
+            title: 'Overview',
             url: '/super-admin/dashboard',
             icon: LayoutDashboard,
           },
           {
-            title: 'Tenants',
+            title: 'Workspaces',
             url: '/super-admin/tenants',
             icon: Building2,
           },
+        ],
+      },
+      {
+        title: 'Systems',
+        items: [
           {
-            title: 'Analytics',
-            url: '/super-admin/analytics',
-            icon: BarChart3,
-          },
-          {
-            title: 'AI Setup',
+            title: 'Provider Setup',
             url: '/super-admin/ai-setup',
             icon: Settings2,
+          },
+          {
+            title: 'Platform Analytics',
+            url: '/super-admin/analytics',
+            icon: BarChart3,
           },
         ],
       },
@@ -69,34 +75,24 @@ export function getTenantSidebarData(tenantId: string): SidebarData {
     },
     teams: [
       {
-        name: 'Tenant Workspace',
+        name: 'Workspace',
         logo: Headphones,
-        plan: 'Client Admin',
+        plan: 'Operations',
       },
     ],
     navGroups: [
       {
-        title: 'Overview',
+        title: 'Workspace',
         items: [
           {
-            title: 'Dashboard',
+            title: 'Overview',
             url: `${base}/dashboard`,
             icon: LayoutDashboard,
           },
-        ],
-      },
-      {
-        title: 'Operations',
-        items: [
           {
             title: 'Calls',
             url: `${base}/calls`,
             icon: Phone,
-          },
-          {
-            title: 'Bookings / Orders',
-            url: `${base}/bookings-orders`,
-            icon: Building2,
           },
           {
             title: 'Callers',
@@ -106,8 +102,33 @@ export function getTenantSidebarData(tenantId: string): SidebarData {
         ],
       },
       {
-        title: 'Omnichannel',
+        title: 'Setup',
         items: [
+          {
+            title: 'Knowledge Base',
+            url: `${base}/config/knowledge`,
+            icon: LibraryBig,
+          },
+          {
+            title: 'Phone Lines',
+            url: `${base}/config/phone-numbers`,
+            icon: Phone,
+          },
+          {
+            title: 'Team',
+            url: `${base}/team`,
+            icon: Users2,
+          },
+        ],
+      },
+      {
+        title: 'Labs',
+        items: [
+          {
+            title: 'Bookings / Orders',
+            url: `${base}/bookings-orders`,
+            icon: Building2,
+          },
           {
             title: 'Shared Inbox',
             url: `${base}/omnichannel/inbox`,
@@ -123,30 +144,10 @@ export function getTenantSidebarData(tenantId: string): SidebarData {
             url: `${base}/omnichannel/automations`,
             icon: Bot,
           },
-        ],
-      },
-      {
-        title: 'Configuration',
-        items: [
           {
-            title: 'Phone Numbers',
-            url: `${base}/config/phone-numbers`,
-            icon: Phone,
-          },
-          {
-            title: 'Knowledge Base',
-            url: `${base}/config/knowledge`,
-            icon: LibraryBig,
-          },
-        ],
-      },
-      {
-        title: 'Team',
-        items: [
-          {
-            title: 'Sub Admins',
-            url: `${base}/team`,
-            icon: Users2,
+            title: 'Agent Rules',
+            url: `${base}/config/agent`,
+            icon: Sparkles,
           },
         ],
       },
