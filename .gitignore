@@ -15,8 +15,11 @@ testem.log
 Thumbs.db
 
 # Local env files
-.env
-.env.dev
+**/.env
+**/.env.*
+!**/.env.example
+!**/.env.dev.example
+!**/.env.test
 
 # Ignore Node.js modules
 node_modules/

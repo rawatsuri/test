@@ -72,6 +72,11 @@ export const envSchema = z.object({
   // ElevenLabs (TTS)
   ELEVENLABS_API_KEY: z.string().optional(),
 
+  // Azure Speech (used by Pipecat runtime, often colocated in the same env file)
+  AZURE_SPEECH_KEY: z.string().optional(),
+  AZURE_SPEECH_REGION: z.string().optional(),
+  AZURE_SPEECH_VOICE: z.string().optional(),
+
   // Groq (Fast LLM)
   GROQ_API_KEY: z.string().optional(),
 
@@ -80,6 +85,10 @@ export const envSchema = z.object({
 
   // Cartesia (TTS)
   CARTESIA_API_KEY: z.string().optional(),
+
+  // Monitoring / scripts
+  SENTRY_DSN: z.string().optional(),
+  BASE_URL: z.string().optional(),
 });
 
 export type EnvVars = z.infer<typeof envSchema>;

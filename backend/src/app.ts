@@ -64,8 +64,10 @@ app.use('/conversations', pipecatHttpProxy);    // Pipecat conversation API
 
 if (env.NODE_ENV === 'production' && env.CLERK_SECRET_KEY && env.CLERK_PUBLISHABLE_KEY) {
   app.use(clerkMiddleware());
-} else {
+} else if (env.NODE_ENV === 'production') {
   console.warn('Clerk keys not configured. Skipping Clerk middleware in this environment.');
+} else {
+  console.info('Running without Clerk middleware in non-production mode.');
 }
 if (env.NODE_ENV === 'production') {
   app.use(loggerMiddleware);
