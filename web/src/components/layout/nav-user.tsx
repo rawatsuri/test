@@ -45,7 +45,7 @@ export function NavUser({ user }: NavUserProps) {
             <DropdownMenuTrigger asChild>
               <SidebarMenuButton
                 size='lg'
-                className='h-auto rounded-xl border border-sidebar-border/60 px-3 py-3 data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground'
+                className='h-auto rounded-[1.1rem] border border-sidebar-border/70 bg-card/55 px-3 py-3 shadow-[0_16px_35px_-28px_color-mix(in_oklab,var(--foreground)_24%,transparent)] data-[state=open]:bg-sidebar-accent/85 data-[state=open]:text-sidebar-accent-foreground'
               >
                 <Avatar className='h-9 w-9 rounded-lg'>
                   <AvatarImage src={user.avatar} alt={user.name} />

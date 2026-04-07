@@ -21,13 +21,13 @@ export function TeamSwitcher({ teams }: TeamSwitcherProps) {
       <SidebarMenuItem>
         <SidebarMenuButton
           size='lg'
-          className='h-auto items-start rounded-xl border border-sidebar-border/60 bg-sidebar-accent/30 px-3 py-3'
+          className='h-auto items-start rounded-[1.1rem] border border-sidebar-border/70 bg-[linear-gradient(135deg,color-mix(in_oklab,var(--sidebar-primary)_18%,white),color-mix(in_oklab,var(--sidebar-accent)_72%,white))] px-3 py-3 shadow-[0_18px_35px_-28px_color-mix(in_oklab,var(--sidebar-primary)_35%,transparent)]'
         >
-          <div className='flex aspect-square size-9 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground shadow-sm'>
+          <div className='flex aspect-square size-9 items-center justify-center rounded-xl bg-sidebar-primary text-sidebar-primary-foreground shadow-sm'>
             <activeTeam.logo className='size-4' />
           </div>
           <div className='grid flex-1 text-start leading-tight'>
-            <span className='truncate text-[11px] font-medium uppercase tracking-[0.18em] text-sidebar-foreground/55'>
+            <span className='truncate text-[10px] font-semibold uppercase tracking-[0.22em] text-sidebar-foreground/55'>
               {activeTeam.plan}
             </span>
             <span className='truncate text-sm font-semibold'>{activeTeam.name}</span>

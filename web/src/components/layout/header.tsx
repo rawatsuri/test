@@ -26,8 +26,8 @@ export function Header({ className, fixed, children, ...props }: HeaderProps) {
   return (
     <header
       className={cn(
-        'z-50 h-16',
-        fixed && 'header-fixed peer/header sticky top-0 w-[inherit]',
+        'z-50 min-h-20',
+        fixed && 'header-fixed peer/header sticky top-0 w-full',
         offset > 10 && fixed ? 'shadow' : 'shadow-none',
         className
       )}
@@ -35,14 +35,14 @@ export function Header({ className, fixed, children, ...props }: HeaderProps) {
     >
       <div
         className={cn(
-          'relative flex h-full items-center gap-3 p-4 sm:gap-4',
+          'relative flex min-h-20 items-start gap-3 px-4 py-3 sm:gap-4 sm:px-5 sm:py-4',
           offset > 10 &&
             fixed &&
             'after:absolute after:inset-0 after:-z-10 after:bg-background/20 after:backdrop-blur-lg'
         )}
       >
-        <SidebarTrigger variant='outline' className='max-md:scale-125' />
-        <Separator orientation='vertical' className='h-6' />
+        <SidebarTrigger variant='outline' className='mt-0.5 max-md:scale-110' />
+        <Separator orientation='vertical' className='mt-1 hidden h-7 sm:block' />
         {children}
       </div>
     </header>

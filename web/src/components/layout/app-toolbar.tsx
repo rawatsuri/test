@@ -118,32 +118,37 @@ export function AppToolbar() {
   const meta = getToolbarMeta(href, tenantId, role)
 
   return (
-    <Header fixed className='border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80'>
-      <div className='flex w-full items-center justify-between gap-6'>
-        <div className='min-w-0'>
-          <div className='text-[11px] font-medium uppercase tracking-[0.22em] text-muted-foreground'>
+    <Header fixed className='border-b border-border/70 bg-background/90 backdrop-blur supports-[backdrop-filter]:bg-background/78'>
+      <div className='flex w-full flex-col gap-3 md:flex-row md:items-start md:justify-between md:gap-6'>
+        <div className='min-w-0 flex-1'>
+          <div className='inline-flex max-w-full rounded-full border border-border/70 bg-secondary/70 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.22em] text-secondary-foreground'>
             {meta.eyebrow}
           </div>
-          <div className='mt-1 flex flex-wrap items-center gap-x-3 gap-y-1'>
-            <h1 className='text-lg font-semibold tracking-tight'>{meta.title}</h1>
+          <div className='mt-2 flex flex-wrap items-center gap-x-3 gap-y-2'>
+            <h1 className='max-w-full text-xl font-semibold tracking-tight text-foreground sm:text-2xl'>
+              {meta.title}
+            </h1>
             {!superAdminMode && role ? (
-              <span className='text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground'>
+              <span className='rounded-full border border-border/70 bg-card/80 px-2.5 py-1 text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground'>
                 {role}
               </span>
             ) : null}
           </div>
-          <p className='mt-1 hidden max-w-3xl text-sm text-muted-foreground md:block'>
+          <p className='mt-2 max-w-3xl text-sm leading-5 text-muted-foreground'>
             {meta.description}
           </p>
         </div>
 
-        <div className='flex shrink-0 items-center gap-2'>
+        <div className='flex shrink-0 flex-wrap items-center gap-2 self-start md:justify-end'>
           <ThemeSwitch />
-          <Button variant='outline' size='icon' aria-label='Notifications'>
+          <Button variant='outline' size='icon' aria-label='Notifications' className='rounded-full'>
             <Bell className='size-4' />
           </Button>
-          <Button asChild className='hidden sm:inline-flex'>
-            <Link to={superAdminMode ? '/super-admin/tenants' : '/tenant/$tenantId/calls'} params={tenantId ? { tenantId } : undefined as never}>
+          <Button asChild className='sm:inline-flex'>
+            <Link
+              to={superAdminMode ? '/super-admin/tenants' : '/tenant/$tenantId/calls'}
+              params={tenantId ? { tenantId } : (undefined as never)}
+            >
               {superAdminMode ? 'Open Workspaces' : 'Open Calls'}
             </Link>
           </Button>
