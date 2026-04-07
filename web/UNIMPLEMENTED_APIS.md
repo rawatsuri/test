@@ -1,74 +1,85 @@
-# Unimplemented APIs Required for Core Business MVP
+# Frontend API Status
 
-Last Updated: February 25, 2026
-Purpose: API contracts needed by frontend MVP but not yet available (or not finalized).
-Scope: Documentation only. No backend file changes.
+Last Updated: April 7, 2026
+Purpose: Keep the frontend runtime modes honest by separating implemented backend routes from mock-only UI modules.
 
-## 1) Super Admin APIs (Platform-Level)
+## Runtime Modes
 
-1. List tenants (admin scope)
-- `GET /v1/admin/tenants?page=&limit=&search=&status=&plan=&industry=`
+1. `VITE_AUTH_MODE=mock`
+- Local sign-in is handled entirely in the frontend.
+- Recommended for local development.
 
-2. Get tenant detail (admin scope)
-- `GET /v1/admin/tenants/:tenantId`
+2. `VITE_DATA_MODE=api`
+- Use real backend routes where they exist.
+- Some UI modules remain unavailable in this mode.
 
-3. Create tenant
-- `POST /v1/admin/tenants`
+3. `VITE_DATA_MODE=mock`
+- Uses seeded browser storage so the entire dashboard remains navigable.
 
-4. Update tenant
-- `PUT /v1/admin/tenants/:tenantId`
+## Implemented Backend Routes Used By The Frontend
 
-5. Update tenant status
-- `PUT /v1/admin/tenants/:tenantId/status`
-- Body: `{ status: 'ACTIVE' | 'SUSPENDED' | 'TRIAL' }`
+1. `GET /v1/tenants`
+2. `POST /v1/tenants`
+3. `GET /v1/tenants/:id`
+4. `PUT /v1/tenants/:id`
+5. `DELETE /v1/tenants/:id`
+6. `GET /v1/tenants/:tenantId/calls`
+7. `GET /v1/tenants/:tenantId/calls/:callId`
+8. `PUT /v1/tenants/:tenantId/calls/:callId`
+9. `POST /v1/tenants/:tenantId/calls/outbound`
+10. `GET /v1/tenants/:tenantId/callers`
+11. `GET /v1/tenants/:tenantId/callers/:callerId`
+12. `PUT /v1/tenants/:tenantId/callers/:callerId`
+13. `POST /v1/tenants/:tenantId/callers/:callerId/save`
+14. `POST /v1/tenants/:tenantId/callers/:callerId/unsave`
+15. `DELETE /v1/tenants/:tenantId/callers/:callerId`
+16. `GET /v1/tenants/:tenantId/agent-config`
+17. `POST /v1/tenants/:tenantId/agent-config`
+18. `PUT /v1/tenants/:tenantId/agent-config`
+19. `DELETE /v1/tenants/:tenantId/agent-config`
+20. `GET /v1/tenants/:tenantId/phone-numbers`
+21. `POST /v1/tenants/:tenantId/phone-numbers`
+22. `GET /v1/tenants/:tenantId/phone-numbers/:phoneNumberId`
+23. `PUT /v1/tenants/:tenantId/phone-numbers/:phoneNumberId`
+24. `DELETE /v1/tenants/:tenantId/phone-numbers/:phoneNumberId`
+25. `GET /v1/tenants/:tenantId/knowledge`
+26. `GET /v1/tenants/:tenantId/knowledge/search`
+27. `GET /v1/tenants/:tenantId/knowledge/context`
+28. `GET /v1/tenants/:tenantId/knowledge/:knowledgeId`
+29. `POST /v1/tenants/:tenantId/knowledge`
+30. `PUT /v1/tenants/:tenantId/knowledge/:knowledgeId`
+31. `DELETE /v1/tenants/:tenantId/knowledge/:knowledgeId`
+32. `GET /v1/tenants/:tenantId/users`
+33. `POST /v1/tenants/:tenantId/users`
+34. `GET /v1/tenants/:tenantId/users/:userId`
+35. `PUT /v1/tenants/:tenantId/users/:userId`
+36. `DELETE /v1/tenants/:tenantId/users/:userId`
+37. `GET /v1/auth/me`
 
-6. Update tenant plan
-- `PUT /v1/admin/tenants/:tenantId/plan`
-- Body: `{ plan: 'STARTER' | 'PROFESSIONAL' | 'ENTERPRISE' }`
+## Mock-Only UI Modules Today
 
-7. Platform dashboard stats
-- `GET /v1/admin/analytics?period=last_30_days`
+These screens remain frontend-only when `VITE_DATA_MODE=mock`:
 
-## 2) Tenant Dashboard APIs
+1. tenant analytics/dashboard aggregates not backed by `/analytics`
+2. bookings/orders queue
+3. omnichannel inbox/conversations
+4. omnichannel channels
+5. omnichannel automations
+6. super-admin analytics
 
-1. Tenant analytics summary
-- `GET /v1/tenants/:tenantId/analytics?period=last_30_days`
-- Returns: totalCalls, avgDuration, totalCallers, activePhoneNumbers, callsTrend, callsByStatus
+## Backend Gaps Still Worth Closing
 
-## 3) Calls APIs (Enhancements)
+1. admin-scoped tenant routes such as `/v1/admin/tenants`
+2. tenant analytics summary route
+3. bookings/orders CRUD routes
+4. omnichannel conversation/channel/automation routes
+5. invitation workflow routes for team onboarding
+6. richer `GET /v1/auth/me` payload once Clerk-backed frontend auth is enabled
 
-1. Call recording retrieval
-- `GET /v1/tenants/:tenantId/calls/:callId/recording`
-- Returns downloadable/streamable URL
+## Response Contract
 
-2. Call transcript endpoint (if not embedded in call detail)
-- `GET /v1/tenants/:tenantId/calls/:callId/transcripts`
+Current backend already mostly follows:
 
-3. Call extractions endpoint (if not embedded in call detail)
-- `GET /v1/tenants/:tenantId/calls/:callId/extractions`
-
-## 4) Team/Sub-Admin APIs (Tenant Scope)
-
-1. Invite sub-admin (optional but recommended)
-- `POST /v1/tenants/:tenantId/users/invite`
-- Body: `{ email, role }`
-
-2. List pending invites
-- `GET /v1/tenants/:tenantId/users/invites`
-
-3. Revoke pending invite
-- `DELETE /v1/tenants/:tenantId/users/invites/:inviteId`
-
-## 5) Auth/Identity APIs
-
-1. Current user profile with platform role + tenant roles
-- `GET /v1/auth/me`
-- Must include enough role data to drive nav and permissions in UI.
-
-## 6) Response Contract Standardization (Needed for Frontend Stability)
-
-Recommended unified envelope for all endpoints:
-- Success:
 ```json
 {
   "success": true,
@@ -82,7 +93,8 @@ Recommended unified envelope for all endpoints:
 }
 ```
 
-- Error:
+Errors are not fully standardized yet across all modules. New routes should use:
+
 ```json
 {
   "success": false,
@@ -90,30 +102,3 @@ Recommended unified envelope for all endpoints:
   "errors": []
 }
 ```
-
-## 7) Priority for Core MVP
-
-P0 (must have):
-1. `/v1/admin/tenants` (list/create/update)
-2. `/v1/admin/tenants/:tenantId/status`
-3. `/v1/tenants/:tenantId/analytics`
-4. `/v1/auth/me` role payload
-
-P1 (should have):
-1. call recording endpoint
-2. invite workflow endpoints
-
-P2 (optional for next release):
-1. dedicated transcript/extraction endpoints (if call detail already embeds them)
-
-## 8) Bookings / Orders APIs (New Frontend Module)
-
-1. List booking/order queue
-- `GET /v1/tenants/:tenantId/bookings-orders?page=&limit=&type=&status=&search=`
-
-2. Update booking/order status
-- `PUT /v1/tenants/:tenantId/bookings-orders/:id`
-- Body example: `{ status: 'CONFIRMED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED' }`
-
-3. Get booking/order detail (optional)
-- `GET /v1/tenants/:tenantId/bookings-orders/:id`

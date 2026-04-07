@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { getCookie, setCookie, removeCookie } from '@/lib/cookies'
 
-const ACCESS_TOKEN = 'thisisjustarandomstring'
+export const ACCESS_TOKEN_COOKIE = 'omni_frontend_access_token'
 
 interface AuthUser {
   accountNo: string
@@ -22,7 +22,7 @@ interface AuthState {
 }
 
 export const useAuthStore = create<AuthState>()((set) => {
-  const cookieState = getCookie(ACCESS_TOKEN)
+  const cookieState = getCookie(ACCESS_TOKEN_COOKIE)
   let initToken = ''
   if (cookieState) {
     try {
@@ -40,17 +40,17 @@ export const useAuthStore = create<AuthState>()((set) => {
       accessToken: initToken,
       setAccessToken: (accessToken) =>
         set((state) => {
-          setCookie(ACCESS_TOKEN, JSON.stringify(accessToken))
+          setCookie(ACCESS_TOKEN_COOKIE, JSON.stringify(accessToken))
           return { ...state, auth: { ...state.auth, accessToken } }
         }),
       resetAccessToken: () =>
         set((state) => {
-          removeCookie(ACCESS_TOKEN)
+          removeCookie(ACCESS_TOKEN_COOKIE)
           return { ...state, auth: { ...state.auth, accessToken: '' } }
         }),
       reset: () =>
         set((state) => {
-          removeCookie(ACCESS_TOKEN)
+          removeCookie(ACCESS_TOKEN_COOKIE)
           return {
             ...state,
             auth: { ...state.auth, user: null, accessToken: '' },

@@ -1,5 +1,10 @@
 import { Router } from 'express';
 
+import {
+  attachUserContext,
+  getAuthContext,
+  requireApiAuth,
+} from '../../../middleware/clerk-auth.middleware';
 import { ClerkWebhookController } from '../controllers/clerk-webhook.controller';
 
 const router = Router();
@@ -9,11 +14,10 @@ const clerkWebhookController = new ClerkWebhookController();
 router.post('/webhook/clerk', clerkWebhookController.handleWebhook);
 
 // Get current authenticated user info
-router.get('/me', (req, res) => {
-  // This will be protected by middleware in app.ts
+router.get('/me', requireApiAuth, attachUserContext, (req, res) => {
   res.json({
     success: true,
-    message: 'User info endpoint',
+    data: getAuthContext(req),
   });
 });
 

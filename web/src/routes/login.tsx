@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { createFileRoute, redirect, useNavigate } from '@tanstack/react-router'
 import { toast } from 'sonner'
+import { describeFrontendRuntime, isMockAuthMode } from '@/config/runtime'
 import { platformService } from '@/lib/platform-service'
 import { useAuthStore } from '@/stores/auth-store'
 import { Button } from '@/components/ui/button'
@@ -21,12 +22,17 @@ export const Route = createFileRoute('/login')({
 function LoginPage() {
   const navigate = useNavigate()
   const { auth } = useAuthStore()
+  const runtime = describeFrontendRuntime()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+    if (!isMockAuthMode) {
+      toast.error('Interactive login is disabled. Switch VITE_AUTH_MODE=mock for local development.')
+      return
+    }
     if (!email.trim() || !password.trim()) {
       toast.error('Email and password are required')
       return
@@ -59,7 +65,7 @@ function LoginPage() {
         <CardHeader>
           <CardTitle>Login</CardTitle>
           <CardDescription>
-            Sign in with your own account credentials.
+            Local runtime: auth={runtime.authMode}, data={runtime.dataMode}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -70,6 +76,7 @@ function LoginPage() {
                 type='email'
                 autoComplete='email'
                 value={email}
+                disabled={!isMockAuthMode}
                 onChange={(event) => setEmail(event.target.value)}
               />
             </div>
@@ -79,17 +86,26 @@ function LoginPage() {
                 type='password'
                 autoComplete='current-password'
                 value={password}
+                disabled={!isMockAuthMode}
                 onChange={(event) => setPassword(event.target.value)}
               />
             </div>
-            <Button className='w-full' type='submit' disabled={isSubmitting}>
-              {isSubmitting ? 'Signing in...' : 'Sign in'}
+            <Button className='w-full' type='submit' disabled={!isMockAuthMode || isSubmitting}>
+              {isSubmitting ? 'Signing in...' : isMockAuthMode ? 'Sign in' : 'Mock Auth Disabled'}
             </Button>
           </form>
 
-          <p className='mt-4 text-xs text-muted-foreground'>
-            Mock login password: <span className='font-medium'>Pass@123</span>
-          </p>
+          {isMockAuthMode ? (
+            <p className='mt-4 text-xs text-muted-foreground'>
+              Mock login password: <span className='font-medium'>Pass@123</span>
+            </p>
+          ) : (
+            <p className='mt-4 text-xs text-muted-foreground'>
+              This build expects external auth wiring. For local development, set
+              {' '}
+              <span className='font-medium'>VITE_AUTH_MODE=mock</span>.
+            </p>
+          )}
         </CardContent>
       </Card>
     </div>

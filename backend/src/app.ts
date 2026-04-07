@@ -8,7 +8,7 @@ import { env } from './config/env-config';
 
 // Raw http-proxy for reliable WebSocket + HTTP proxying to Pipecat
 const pipecatProxyServer = httpProxy.createProxyServer({
-  target: 'http://localhost:3001',
+  target: env.PIPECAT_BASE_URL,
   ws: true,
   changeOrigin: true,
 });
@@ -21,7 +21,6 @@ pipecatProxyServer.on('error', (err, req, res) => {
 const pipecatHttpProxy = (req: any, res: any) => {
   pipecatProxyServer.web(req, res);
 };
-
 
 import agentConfigRoutes from './features/agent-config/routes/agent-config.routes';
 import authRoutes from './features/auth/routes/auth.routes';

@@ -870,7 +870,7 @@ ELEVENLABS_API_KEY=your_elevenlabs_key
 OPENAI_API_KEY=your_openai_key
 
 # Vocode
-VOCODE_BASE_URL=http://localhost:3001
+PIPECAT_BASE_URL=http://localhost:3001
 
 # Security
 JWT_SECRET=your_jwt_secret

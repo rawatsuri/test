@@ -1,200 +1,205 @@
 # AI Voice Platform
 
-A comprehensive multi-tenant SaaS platform that enables businesses (doctors, restaurants, service providers) to handle customer calls using AI voice agents with memory and contextual understanding. Built specifically for the Indian market with native language support.
+A multi-tenant SaaS platform for AI-assisted customer operations. The current repo combines:
 
-## Overview
+- `backend/`: TypeScript/Express API for tenants, callers, calls, knowledge, users, and agent config
+- `pipecat-server/`: Python Pipecat runtime for live voice conversations
+- `web/`: React dashboard that can run against mock data or the real backend
 
-This platform combines a robust **Express.js backend** with **Vocode voice AI** to create intelligent call handling systems. Businesses can deploy AI agents that:
+## Current Architecture
 
-- Answer inbound calls in real-time
-- Maintain conversation memory across interactions  
-- Extract structured data (appointments, orders, symptoms)
-- Operate with tenant-specific knowledge and personas
-- Handle Indian telephony via **Exotel** integration
-- Support **22 Indian languages** via **Sarvam AI**
-- Achieve **~₹1-2 per call** infrastructure cost
-
-## Architecture
-
+```text
+Telephony Provider -> Express Backend -> PostgreSQL
+                     |               |
+                     |               -> Prisma domain model
+                     |
+                     -> Pipecat runtime for live audio sessions
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                              VOICE PLATFORM                                   │
-├──────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐   │
-│  │   EXOTEL    │───▶│   VOCODE    │───▶│   EXPRESS   │───▶│  POSTGRES   │   │
-│  │  Telephony  │◀───│  Voice AI   │◀───│  BACKEND    │◀───│  + PRISMA   │   │
-│  └─────────────┘    └─────────────┘    └─────────────┘    └─────────────┘   │
-│        │                  │                   │                  │           │
-│   SIP/WebRTC         STT + TTS            Business Logic    Persistence     │
-│                                                                              │
-└──────────────────────────────────────────────────────────────────────────────┘
 
-External Services:
-├── Exotel (Indian Telephony)
-├── Sarvam AI (Indian STT/TTS - 22 languages)
-├── Deepgram (Speech-to-Text)
-├── ElevenLabs / Google TTS (Text-to-Speech)
-├── OpenAI GPT-4 / Groq (LLM)
-└── Redis (Session Cache)
+The older docs in this repo still reference Vocode in places. The live runtime in this codebase is Pipecat.
+
+## Local Run Modes
+
+The frontend now uses explicit runtime switches:
+
+- `VITE_AUTH_MODE=mock | clerk`
+- `VITE_DATA_MODE=mock | api`
+
+Recommended local combinations:
+
+1. `mock auth + mock data`
+   Use this when you want the whole dashboard navigable, including UI sections whose backend APIs are not finished yet.
+
+2. `mock auth + api data`
+   Use this when you want to exercise the real backend routes that already exist.
+
+## Local Startup
+
+### 1. Backend
+
+Copy `backend/.env.dev.example` and fill in the required values:
+
+```bash
+cd backend
+cp .env.dev.example .env.development
+npm install
+npm run dev
 ```
+
+Minimum values to set for a local boot:
+
+```bash
+NODE_ENV=development
+PORT=5000
+DATABASE_URL=postgresql://...
+MASTER_ENCRYPTION_KEY=...
+INTERNAL_API_SECRET=...
+PIPECAT_BASE_URL=http://localhost:3001
+```
+
+### 2. Pipecat Runtime
+
+```bash
+cd pipecat-server
+pip install -r requirements.txt
+python server.py
+```
+
+The runtime listens on `PIPECAT_PORT` and defaults to `3001`.
+
+### 3. Frontend
+
+Copy `web/.env.example` and choose the mode you want:
+
+```bash
+cd web
+cp .env.example .env.local
+```
+
+Recommended for the first real run:
+
+```bash
+VITE_API_URL=http://localhost:5000
+VITE_AUTH_MODE=mock
+VITE_DATA_MODE=api
+```
+
+Then start the app:
+
+```bash
+npm install
+npm run dev
+```
+
+### 4. Mock Login
+
+When `VITE_AUTH_MODE=mock`:
+
+- password: `Pass@123`
+- super admin email: `owner@aivoice.ai`
+- tenant user emails: seeded in `web/src/lib/platform-service.ts`
+
+## Voice Runtime Environment
+
+- `PIPECAT_BASE_URL`: backend proxy target and backend-to-Pipecat API client base URL
+- `PIPECAT_STREAM_URL`: optional public media-stream base URL when a provider cannot use the internal base URL directly
+- `PIPECAT_OUTBOUND_CALL_URL`: optional bridge endpoint for backend-triggered outbound calls
 
 ## Project Structure
 
-```
+```text
 .
-├── src/                              # Express Backend (TypeScript)
-│   ├── app.ts                        # Express app setup
-│   ├── server.ts                     # Server with graceful shutdown
-│   ├── config/                       # Configuration
-│   │   ├── env-config.ts             # Environment variables
-│   │   ├── env-schema.ts             # Zod validation schema
-│   │   └── prisma.config.ts          # Prisma client singleton
-│   ├── features/                     # Feature-based architecture
-│   │   └── user/                     # User module
-│   │       ├── controllers/          # HTTP request handlers
-│   │       ├── services/             # Business logic
-│   │       ├── repositories/         # Database access
-│   │       ├── routes/               # API routes
-│   │       ├── schemas/              # Zod validation schemas
-│   │       ├── types/                # TypeScript types
-│   │       └── __tests__/            # Unit tests (Vitest)
-│   ├── middleware/                   # Global middleware
-│   │   ├── auth.middleware.ts        # JWT authentication
-│   │   ├── validation.middleware.ts  # Request validation
-│   │   ├── security.middleware.ts    # Helmet, rate limiting
-│   │   ├── api-error.middleware.ts   # Error handling
-│   │   └── pino-logger.ts            # Request logging
-│   ├── utils/                        # Utilities
-│   │   └── generate-token.util.ts    # JWT token generation
-│   └── constants/                    # App constants
-│       └── messages.ts               # Response messages
-│
-├── vocode-core/                      # Vocode Voice AI Library (Enhanced)
-│   ├── vocode/
-│   │   ├── streaming/
-│   │   │   ├── agent/                # LLM Agents
-│   │   │   │   ├── chat_gpt_agent.py
-│   │   │   │   ├── anthropic_agent.py
-│   │   │   │   ├── groq_agent.py     # Fast inference
-│   │   │   │   └── langchain_agent.py
-│   │   │   │
-│   │   │   ├── transcriber/          # STT Engines
-│   │   │   │   ├── deepgram_transcriber.py
-│   │   │   │   ├── sarvam_transcriber.py    # Indian languages
-│   │   │   │   ├── assembly_ai_transcriber.py
-│   │   │   │   └── azure_transcriber.py
-│   │   │   │
-│   │   │   ├── synthesizer/          # TTS Engines
-│   │   │   │   ├── eleven_labs_synthesizer.py
-│   │   │   │   ├── sarvam_synthesizer.py    # Indian languages
-│   │   │   │   ├── azure_synthesizer.py
-│   │   │   │   └── google_synthesizer.py
-│   │   │   │
-│   │   │   ├── telephony/            # Telephony Providers
-│   │   │   │   ├── client/
-│   │   │   │   │   ├── exotel_client.py     # Indian telephony
-│   │   │   │   │   ├── plivo_client.py      # Cloud telephony
-│   │   │   │   │   ├── twilio_client.py
-│   │   │   │   │   └── vonage_client.py
-│   │   │   │   │
-│   │   │   │   ├── server/
-│   │   │   │   │   ├── exotel_routes.py     # Exotel webhooks
-│   │   │   │   │   ├── plivo_routes.py      # Plivo webhooks
-│   │   │   │   │   └── base.py
-│   │   │   │   │
-│   │   │   │   └── conversation/     # Phone conversations
-│   │   │   │
-│   │   │   ├── action/               # Agent Actions
-│   │   │   │   ├── end_conversation.py
-│   │   │   │   ├── transfer_call.py
-│   │   │   │   └── dtmf.py
-│   │   │   │
-│   │   │   └── models/               # Configuration models
-│   │   │
-│   │   └── turn_based/               # Sequential conversations
-│   │
-│   ├── apps/                         # Sample applications
-│   ├── tests/                        # Test suite
-│   └── quickstarts/                  # Getting started examples
-│
-├── docs/
-│   └── VOICE_PLATFORM_SPEC.md        # Detailed product specification
-├── prisma/                           # Database schema
-├── package.json                      # Node.js dependencies
-└── README.md                         # This file
+├── backend/
+├── pipecat-server/
+└── web/
 ```
 
 ## Backend Features
 
-### 1. Authentication System
-- **JWT-based authentication** with access tokens
-- **User registration** with email/password
-- **Secure login** with bcrypt password hashing
-- **Protected routes** via auth middleware
-- **Role-based access control** (RBAC)
-- JWT payload includes: `userId`, `role`, `dealerId`
+### 1. Current Auth Model
 
-### 2. API Endpoints
+- **Production**: Clerk-backed route protection plus tenant scoping
+- **Local development**: frontend mock auth is supported; backend tenant APIs are open in development mode
+- `GET /v1/auth/me` now returns the current auth context when Clerk-backed auth is active
 
-#### Public Endpoints
+### 2. Current API Surface
+
+Primary business routes:
+
+```text
+GET/POST    /v1/tenants
+GET/PUT/DELETE /v1/tenants/:id
+
+GET/POST    /v1/tenants/:tenantId/users
+GET/PUT/DELETE /v1/tenants/:tenantId/users/:userId
+
+GET/POST    /v1/tenants/:tenantId/agent-config
+PUT/DELETE  /v1/tenants/:tenantId/agent-config
+
+GET/POST    /v1/tenants/:tenantId/phone-numbers
+GET/PUT/DELETE /v1/tenants/:tenantId/phone-numbers/:phoneNumberId
+
+GET/POST    /v1/tenants/:tenantId/calls
+GET/PUT/DELETE /v1/tenants/:tenantId/calls/:callId
+POST        /v1/tenants/:tenantId/calls/outbound
+
+GET/PUT/DELETE /v1/tenants/:tenantId/callers/:callerId
+POST        /v1/tenants/:tenantId/callers/:callerId/save
+POST        /v1/tenants/:tenantId/callers/:callerId/unsave
+
+GET/POST    /v1/tenants/:tenantId/knowledge
+GET         /v1/tenants/:tenantId/knowledge/search
+GET         /v1/tenants/:tenantId/knowledge/context
+GET/PUT/DELETE /v1/tenants/:tenantId/knowledge/:knowledgeId
 ```
-GET    /api/users/              - Health check
-POST   /api/users/register      - User registration
-POST   /api/users/login         - User login
-GET    /heartbeat               - Service health check
+
+Integration routes:
+
+```text
+POST /webhooks/exotel/incoming
+POST /webhooks/exotel/status
+POST /webhooks/plivo/incoming
+POST /webhooks/plivo/status
+POST /webhooks/twilio/incoming
+POST /webhooks/twilio/status
+
+POST /api/internal/calls/:callId/transcript
+POST /api/internal/calls/:callId/extraction
+POST /api/internal/calls/:callId/complete
+POST /api/internal/calls/:callId/transfer
 ```
 
-#### Protected Endpoints
-```
-GET    /api/users/profile       - Get user profile (requires auth)
-```
+### 3. Cross-Cutting Infrastructure
 
-### 3. Request Validation
-All incoming requests are validated using **Zod schemas**:
-- Register: email, password validation
-- Login: credentials validation
-- Automatic error responses for invalid data
+- **Environment validation** with Zod at process start
+- **Prisma singleton** for database access
+- **Helmet**, rate limiting, JSON body parsing, and CORS
+- **Webhook signature validation** for Exotel, Plivo, and Twilio
+- **HTTP/WebSocket proxying** from the backend to the Pipecat runtime
 
-### 4. Security Features
-- **Helmet** - Security headers
-- **Rate limiting** - Prevent abuse
-- **CORS** - Cross-origin configuration
-- **Host whitelist** - URL-based access control
-- **JWT secret** - Minimum 32 characters required
-- **Environment validation** - All env vars validated at startup
+### 4. Data Model
 
-### 5. Graceful Shutdown
-The server handles shutdown signals properly:
-- Closes database connections (Prisma)
-- Closes WebSocket connections
-- Terminates child processes
-- 10-second timeout for forced shutdown
-- Handles uncaught exceptions and unhandled rejections
-
-### 6. Database
 - **PostgreSQL** with **Prisma ORM**
-- **Multi-tenant architecture** support
-- **Connection pooling** via Prisma singleton
-- **Schema validation** with Zod
+- Multi-tenant entities for `Tenant`, `User`, `PhoneNumber`, `Caller`, `Call`, `Transcript`, `Extraction`, `AgentConfig`, `KnowledgeItem`, and `Recording`
+- Tenant-level data retention with cleanup support
 
-### 7. Testing
-- **Vitest** for unit and integration testing
-- **Supertest** for API endpoint testing
-- Tests for controllers, services, repositories, and routes
+### 5. Voice Runtime Integration
 
-### 8. Code Quality
-- **TypeScript** - Full type safety
-- **ESLint** - Linting with security plugins
-- **Prettier** - Code formatting
-- **Husky** - Pre-commit hooks
+- Backend receives telephony webhooks
+- Backend builds caller context and tenant-specific agent config
+- Backend creates Pipecat conversations
+- Pipecat calls back into internal routes to persist transcripts, extractions, and completion state
 
-### 9. Logging
-- **Pino** - High-performance logging
-- **Request logging** middleware
-- **Structured logging** with JSON format
+### 6. Testing And Quality
 
-## Voice AI Features (Vocode)
+- **Vitest** for unit and integration tests
+- **TypeScript** throughout
+- **ESLint** and **Prettier**
+- **Pino** logging in production
+
+## Voice AI Features
+
+This section is historical and still uses older Vocode-oriented labels in places. The active runtime in this repo is Pipecat.
 
 ### Custom Indian Additions
 
@@ -374,8 +379,8 @@ ELEVENLABS_API_KEY=your_elevenlabs_key
 OPENAI_API_KEY=your_openai_key
 GROQ_API_KEY=your_groq_key
 
-# Vocode Service
-VOCODE_BASE_URL=http://localhost:3001
+# Pipecat Service
+PIPECAT_BASE_URL=http://localhost:3001
 ```
 
 4. **Set up the database**

@@ -37,6 +37,7 @@ export const envSchema = z.object({
   // Pipecat Server
   PIPECAT_BASE_URL: z.string().url().default('http://localhost:3001'),
   PIPECAT_STREAM_URL: z.string().url().optional(),
+  PIPECAT_OUTBOUND_CALL_URL: z.string().url().optional(),
   PIPECAT_API_KEY: z.string().optional(),
   INTERNAL_API_SECRET: z.string().min(16).optional(),
 

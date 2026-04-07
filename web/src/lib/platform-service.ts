@@ -1,4 +1,5 @@
 import { api } from '@/lib/api'
+import { describeFrontendRuntime, isMockAuthMode, isMockDataMode } from '@/config/runtime'
 import { unwrapApiData, type ApiEnvelope } from '@/lib/api-response'
 import {
   CallDirection,
@@ -51,8 +52,14 @@ type MockDb = {
   bookingOrders: BookingOrder[]
 }
 
-const USE_MOCK_DATA = import.meta.env.VITE_USE_MOCK_DATA !== 'false'
 const STORAGE_KEY = 'omni_frontend_mock_db_v1'
+
+function requireMockData(feature: string): never {
+  const { authMode, dataMode } = describeFrontendRuntime()
+  throw new Error(
+    `${feature} is only available in mock data mode. Current frontend runtime: auth=${authMode}, data=${dataMode}.`
+  )
+}
 
 function id(prefix: string) {
   return `${prefix}_${Math.random().toString(36).slice(2, 10)}`
@@ -570,12 +577,12 @@ function listMockBookingOrders(tenantId: string, filters?: Record<string, string
 
 export const platformService = {
   async getTenants() {
-    if (USE_MOCK_DATA) return envelope(loadDb().tenants.sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt)))
+    if (isMockDataMode) return envelope(loadDb().tenants.sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt)))
     const response = await api.get<ApiEnvelope<Tenant[]>>('/v1/tenants')
     return response.data
   },
   async getTenant(tenantId: string) {
-    if (USE_MOCK_DATA) {
+    if (isMockDataMode) {
       const tenant = loadDb().tenants.find((item) => item.id === tenantId)
       if (!tenant) throw new Error('Tenant not found')
       return envelope(tenant)
@@ -584,7 +591,7 @@ export const platformService = {
     return response.data
   },
   async createTenant(payload: CreateTenantRequest) {
-    if (USE_MOCK_DATA) {
+    if (isMockDataMode) {
       return withDb((db) => {
         const exists = db.tenants.some((item) => item.slug === payload.slug)
         if (exists) throw new Error('Tenant slug already exists')
@@ -609,7 +616,7 @@ export const platformService = {
     return response.data
   },
   async updateTenant(tenantId: string, payload: UpdateTenantRequest) {
-    if (USE_MOCK_DATA) {
+    if (isMockDataMode) {
       return withDb((db) => {
         const tenant = db.tenants.find((item) => item.id === tenantId)
         if (!tenant) throw new Error('Tenant not found')
@@ -621,7 +628,7 @@ export const platformService = {
     return response.data
   },
   async deleteTenant(tenantId: string) {
-    if (USE_MOCK_DATA) {
+    if (isMockDataMode) {
       return withDb((db) => {
         const tenant = db.tenants.find((item) => item.id === tenantId)
         if (!tenant) throw new Error('Tenant not found')
@@ -634,27 +641,27 @@ export const platformService = {
     return response.data
   },
   async getTenantCalls(tenantId: string, filters?: Record<string, string>) {
-    if (USE_MOCK_DATA) return listMockCalls(tenantId, filters)
+    if (isMockDataMode) return listMockCalls(tenantId, filters)
     const response = await api.get<ApiEnvelope<Call[]>>(`/v1/tenants/${tenantId}/calls`, { params: filters })
     return response.data
   },
   async getTenantCall(tenantId: string, callId: string) {
-    if (USE_MOCK_DATA) return getMockCall(tenantId, callId)
+    if (isMockDataMode) return getMockCall(tenantId, callId)
     const response = await api.get<ApiEnvelope<Call>>(`/v1/tenants/${tenantId}/calls/${callId}`)
     return response.data
   },
   async getTenantCallers(tenantId: string, filters?: Record<string, string>) {
-    if (USE_MOCK_DATA) return listMockCallers(tenantId, filters)
+    if (isMockDataMode) return listMockCallers(tenantId, filters)
     const response = await api.get<ApiEnvelope<Caller[]>>(`/v1/tenants/${tenantId}/callers`, { params: filters })
     return response.data
   },
   async getTenantCaller(tenantId: string, callerId: string) {
-    if (USE_MOCK_DATA) return getMockCaller(tenantId, callerId)
+    if (isMockDataMode) return getMockCaller(tenantId, callerId)
     const response = await api.get<ApiEnvelope<Caller>>(`/v1/tenants/${tenantId}/callers/${callerId}`)
     return response.data
   },
   async saveCaller(tenantId: string, callerId: string) {
-    if (USE_MOCK_DATA) {
+    if (isMockDataMode) {
       return withDb((db) => {
         const caller = db.callers.find((item) => item.tenantId === tenantId && item.id === callerId)
         if (!caller) throw new Error('Caller not found')
@@ -667,7 +674,7 @@ export const platformService = {
     return response.data
   },
   async unsaveCaller(tenantId: string, callerId: string) {
-    if (USE_MOCK_DATA) {
+    if (isMockDataMode) {
       return withDb((db) => {
         const caller = db.callers.find((item) => item.tenantId === tenantId && item.id === callerId)
         if (!caller) throw new Error('Caller not found')
@@ -680,7 +687,7 @@ export const platformService = {
     return response.data
   },
   async getAgentConfig(tenantId: string) {
-    if (USE_MOCK_DATA) {
+    if (isMockDataMode) {
       const config = loadDb().agentConfigs.find((item) => item.tenantId === tenantId)
       if (!config) throw new Error('Agent config not found')
       return envelope(config)
@@ -689,7 +696,7 @@ export const platformService = {
     return response.data
   },
   async updateAgentConfig(tenantId: string, payload: UpdateAgentConfigRequest) {
-    if (USE_MOCK_DATA) {
+    if (isMockDataMode) {
       return withDb((db) => {
         const config = db.agentConfigs.find((item) => item.tenantId === tenantId)
         if (!config) throw new Error('Agent config not found')
@@ -701,12 +708,12 @@ export const platformService = {
     return response.data
   },
   async getPhoneNumbers(tenantId: string) {
-    if (USE_MOCK_DATA) return envelope(loadDb().phoneNumbers.filter((item) => item.tenantId === tenantId))
+    if (isMockDataMode) return envelope(loadDb().phoneNumbers.filter((item) => item.tenantId === tenantId))
     const response = await api.get<ApiEnvelope<PhoneNumber[]>>(`/v1/tenants/${tenantId}/phone-numbers`)
     return response.data
   },
   async createPhoneNumber(tenantId: string, payload: CreatePhoneNumberRequest) {
-    if (USE_MOCK_DATA) {
+    if (isMockDataMode) {
       return withDb((db) => {
         const exists = db.phoneNumbers.some((item) => item.number === payload.number)
         if (exists) throw new Error('Phone number already exists')
@@ -727,7 +734,7 @@ export const platformService = {
     return response.data
   },
   async deletePhoneNumber(tenantId: string, phoneNumberId: string) {
-    if (USE_MOCK_DATA) {
+    if (isMockDataMode) {
       return withDb((db) => {
         db.phoneNumbers = db.phoneNumbers.filter((item) => !(item.tenantId === tenantId && item.id === phoneNumberId))
         return envelope({ id: phoneNumberId })
@@ -737,12 +744,12 @@ export const platformService = {
     return response.data
   },
   async getKnowledge(tenantId: string) {
-    if (USE_MOCK_DATA) return envelope(loadDb().knowledgeItems.filter((item) => item.tenantId === tenantId))
+    if (isMockDataMode) return envelope(loadDb().knowledgeItems.filter((item) => item.tenantId === tenantId))
     const response = await api.get<ApiEnvelope<KnowledgeItem[]>>(`/v1/tenants/${tenantId}/knowledge`)
     return response.data
   },
   async createKnowledge(tenantId: string, payload: CreateKnowledgeRequest) {
-    if (USE_MOCK_DATA) {
+    if (isMockDataMode) {
       return withDb((db) => {
         const now = nowIso()
         const knowledge: KnowledgeItem = {
@@ -762,7 +769,7 @@ export const platformService = {
     return response.data
   },
   async updateKnowledge(tenantId: string, knowledgeId: string, payload: UpdateKnowledgeRequest) {
-    if (USE_MOCK_DATA) {
+    if (isMockDataMode) {
       return withDb((db) => {
         const item = db.knowledgeItems.find((row) => row.tenantId === tenantId && row.id === knowledgeId)
         if (!item) throw new Error('Knowledge item not found')
@@ -774,7 +781,7 @@ export const platformService = {
     return response.data
   },
   async deleteKnowledge(tenantId: string, knowledgeId: string) {
-    if (USE_MOCK_DATA) {
+    if (isMockDataMode) {
       return withDb((db) => {
         db.knowledgeItems = db.knowledgeItems.filter((item) => !(item.tenantId === tenantId && item.id === knowledgeId))
         return envelope({ id: knowledgeId })
@@ -784,12 +791,12 @@ export const platformService = {
     return response.data
   },
   async getUsers(tenantId: string) {
-    if (USE_MOCK_DATA) return envelope(loadDb().users.filter((item) => item.tenantId === tenantId))
+    if (isMockDataMode) return envelope(loadDb().users.filter((item) => item.tenantId === tenantId))
     const response = await api.get<ApiEnvelope<User[]>>(`/v1/tenants/${tenantId}/users`)
     return response.data
   },
   async createUser(tenantId: string, payload: CreateUserRequest) {
-    if (USE_MOCK_DATA) {
+    if (isMockDataMode) {
       return withDb((db) => {
         const now = nowIso()
         const user: User = {
@@ -810,7 +817,7 @@ export const platformService = {
     return response.data
   },
   async updateUser(tenantId: string, userId: string, payload: UpdateUserRequest) {
-    if (USE_MOCK_DATA) {
+    if (isMockDataMode) {
       return withDb((db) => {
         const user = db.users.find((item) => item.tenantId === tenantId && item.id === userId)
         if (!user) throw new Error('User not found')
@@ -822,7 +829,7 @@ export const platformService = {
     return response.data
   },
   async deleteUser(tenantId: string, userId: string) {
-    if (USE_MOCK_DATA) {
+    if (isMockDataMode) {
       return withDb((db) => {
         db.users = db.users.filter((item) => !(item.tenantId === tenantId && item.id === userId))
         return envelope({ id: userId })
@@ -832,7 +839,7 @@ export const platformService = {
     return response.data
   },
   async login(email: string, password: string) {
-    if (USE_MOCK_DATA) {
+    if (isMockAuthMode) {
       if (password !== 'Pass@123') {
         throw new Error('Invalid email or password')
       }
@@ -864,18 +871,20 @@ export const platformService = {
         },
       }
     }
-    throw new Error('Login API is not implemented yet')
+    throw new Error(
+      'Interactive login is only available in mock auth mode. Switch VITE_AUTH_MODE=mock or integrate Clerk sign-in.'
+    )
   },
   async getBookingOrders(tenantId: string, filters?: Record<string, string>) {
-    if (USE_MOCK_DATA) return listMockBookingOrders(tenantId, filters)
-    throw new Error('Booking/Orders API is not implemented yet')
+    if (isMockDataMode) return listMockBookingOrders(tenantId, filters)
+    requireMockData('Bookings/orders')
   },
   async updateBookingOrder(
     tenantId: string,
     bookingOrderId: string,
     payload: Partial<BookingOrder>,
   ) {
-    if (USE_MOCK_DATA) {
+    if (isMockDataMode) {
       return withDb((db) => {
         const row = db.bookingOrders.find((item) => item.tenantId === tenantId && item.id === bookingOrderId)
         if (!row) throw new Error('Booking/order not found')
@@ -883,10 +892,10 @@ export const platformService = {
         return envelope(row)
       })
     }
-    throw new Error('Booking/Orders API is not implemented yet')
+    requireMockData('Booking/order updates')
   },
   async getConversations(tenantId: string, filters?: Record<string, string>) {
-    if (USE_MOCK_DATA) {
+    if (isMockDataMode) {
       const db = loadDb()
       let rows = db.conversations.filter((item) => item.tenantId === tenantId)
       if (filters?.search) {
@@ -899,10 +908,10 @@ export const platformService = {
       const { data, pagination } = paginate(rows, toNumber(filters?.page, 1), toNumber(filters?.limit, 20))
       return envelope(data, pagination)
     }
-    throw new Error('Conversations API is not implemented yet')
+    requireMockData('Omnichannel conversations')
   },
   async updateConversation(tenantId: string, conversationId: string, payload: Partial<OmnichannelConversation>) {
-    if (USE_MOCK_DATA) {
+    if (isMockDataMode) {
       return withDb((db) => {
         const row = db.conversations.find((item) => item.tenantId === tenantId && item.id === conversationId)
         if (!row) throw new Error('Conversation not found')
@@ -910,14 +919,14 @@ export const platformService = {
         return envelope(row)
       })
     }
-    throw new Error('Conversations API is not implemented yet')
+    requireMockData('Omnichannel conversation updates')
   },
   async getChannels(tenantId: string) {
-    if (USE_MOCK_DATA) return envelope(loadDb().channels.filter((item) => item.tenantId === tenantId))
-    throw new Error('Channels API is not implemented yet')
+    if (isMockDataMode) return envelope(loadDb().channels.filter((item) => item.tenantId === tenantId))
+    requireMockData('Omnichannel channels')
   },
   async updateChannel(tenantId: string, channelId: string, payload: Partial<OmnichannelChannel>) {
-    if (USE_MOCK_DATA) {
+    if (isMockDataMode) {
       return withDb((db) => {
         const row = db.channels.find((item) => item.tenantId === tenantId && item.id === channelId)
         if (!row) throw new Error('Channel not found')
@@ -925,14 +934,14 @@ export const platformService = {
         return envelope(row)
       })
     }
-    throw new Error('Channels API is not implemented yet')
+    requireMockData('Omnichannel channel updates')
   },
   async getAutomations(tenantId: string) {
-    if (USE_MOCK_DATA) return envelope(loadDb().automations.filter((item) => item.tenantId === tenantId))
-    throw new Error('Automations API is not implemented yet')
+    if (isMockDataMode) return envelope(loadDb().automations.filter((item) => item.tenantId === tenantId))
+    requireMockData('Omnichannel automations')
   },
   async createAutomation(tenantId: string, payload: Pick<OmnichannelAutomation, 'name' | 'trigger' | 'description'>) {
-    if (USE_MOCK_DATA) {
+    if (isMockDataMode) {
       return withDb((db) => {
         const now = nowIso()
         const row: OmnichannelAutomation = {
@@ -951,10 +960,10 @@ export const platformService = {
         return envelope(row)
       })
     }
-    throw new Error('Automations API is not implemented yet')
+    requireMockData('Automation creation')
   },
   async updateAutomation(tenantId: string, automationId: string, payload: Partial<Pick<OmnichannelAutomation, 'name' | 'trigger' | 'description' | 'status'>>) {
-    if (USE_MOCK_DATA) {
+    if (isMockDataMode) {
       return withDb((db) => {
         const row = db.automations.find((item) => item.tenantId === tenantId && item.id === automationId)
         if (!row) throw new Error('Automation not found')
@@ -962,16 +971,16 @@ export const platformService = {
         return envelope(row)
       })
     }
-    throw new Error('Automations API is not implemented yet')
+    requireMockData('Automation updates')
   },
   async deleteAutomation(tenantId: string, automationId: string) {
-    if (USE_MOCK_DATA) {
+    if (isMockDataMode) {
       return withDb((db) => {
         db.automations = db.automations.filter((item) => !(item.tenantId === tenantId && item.id === automationId))
         return envelope({ id: automationId })
       })
     }
-    throw new Error('Automations API is not implemented yet')
+    requireMockData('Automation deletion')
   },
 }
 
@@ -980,7 +989,7 @@ export function resetMockFrontendData() {
 }
 
 export function isMockDataEnabled() {
-  return USE_MOCK_DATA
+  return isMockDataMode
 }
 
 export function unwrap<T>(payload: ApiEnvelope<T>) {

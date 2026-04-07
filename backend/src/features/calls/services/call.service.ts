@@ -251,9 +251,18 @@ export class CallService {
         },
       });
 
-      // 5. Trigger Outbound Call via Python AI Node Bridge
+      if (!env.PIPECAT_OUTBOUND_CALL_URL) {
+        await this.updateStatus(call.id, 'FAILED');
+        return {
+          success: false,
+          error:
+            'PIPECAT_OUTBOUND_CALL_URL is not configured. Outbound calling requires a bridge endpoint.',
+        };
+      }
+
+      // 5. Trigger outbound call via the configured voice bridge endpoint
       try {
-        await axios.post('http://127.0.0.1:3000/create_call', {
+        await axios.post(env.PIPECAT_OUTBOUND_CALL_URL, {
           to_phone: toNumber,
           from_phone: phoneNumber.number,
           system_prompt: agentConfig.systemPrompt || 'You are a helpful assistant.',
@@ -261,9 +270,9 @@ export class CallService {
           llm_provider: agentConfig.llmProvider || 'OPENAI',
           llm_model: agentConfig.llmModel || 'gpt-4o-mini',
           tts_provider: agentConfig.ttsProvider || 'AZURE',
-          stt_provider: agentConfig.sttProvider || 'DEEPGRAM'
+          stt_provider: agentConfig.sttProvider || 'DEEPGRAM',
         });
-        
+
         // Update status to ringing since bridge accepted it
         await this.updateStatus(call.id, 'RINGING');
         return { success: true, call };

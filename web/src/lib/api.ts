@@ -1,6 +1,21 @@
 import axios, { type AxiosError, type AxiosInstance } from 'axios'
+import { isMockAuthMode } from '@/config/runtime'
+import { getCookie } from '@/lib/cookies'
+import { ACCESS_TOKEN_COOKIE } from '@/stores/auth-store'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000'
+
+function getStoredAccessToken() {
+  const cookieValue = getCookie(ACCESS_TOKEN_COOKIE)
+  if (!cookieValue) return ''
+
+  try {
+    const parsed = JSON.parse(cookieValue)
+    return typeof parsed === 'string' ? parsed : ''
+  } catch {
+    return cookieValue
+  }
+}
 
 // Create axios instance
 export const api: AxiosInstance = axios.create({
@@ -9,6 +24,16 @@ export const api: AxiosInstance = axios.create({
     'Content-Type': 'application/json',
   },
   timeout: 30000,
+})
+
+api.interceptors.request.use((config) => {
+  const token = getStoredAccessToken()
+
+  if (token && !isMockAuthMode) {
+    config.headers.Authorization = `Bearer ${token}`
+  }
+
+  return config
 })
 
 // Response interceptor for error handling
@@ -21,32 +46,7 @@ api.interceptors.response.use(
 
 // Hook to get authenticated API client
 export function useApi() {
-  const authenticatedApi = axios.create({
-    baseURL: API_BASE_URL,
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    timeout: 30000,
-  })
-
-  // Add auth token in request interceptor
-  authenticatedApi.interceptors.request.use(async (config) => {
-    // Get token from Clerk if available
-    const token = localStorage.getItem('clerk-token')
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`
-    }
-    return config
-  })
-
-  authenticatedApi.interceptors.response.use(
-    (response) => response,
-    (error: AxiosError) => {
-      return Promise.reject(error)
-    }
-  )
-
-  return authenticatedApi
+  return api
 }
 
 // Generic API request wrappers
