@@ -44,6 +44,14 @@ export class LocalAuthController {
       }
 
       const matches = await this.prisma.user.findMany({
+        select: {
+          id: true,
+          tenantId: true,
+          email: true,
+          role: true,
+          passwordHash: true,
+          active: true,
+        },
         where: {
           email: {
             equals: email,
@@ -104,6 +112,13 @@ export class LocalAuthController {
       }
 
       const user = await this.prisma.user.findUnique({
+        select: {
+          id: true,
+          tenantId: true,
+          email: true,
+          role: true,
+          active: true,
+        },
         where: { id: req.userId },
       });
 
