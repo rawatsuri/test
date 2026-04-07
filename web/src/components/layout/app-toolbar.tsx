@@ -1,5 +1,5 @@
 import { Link, useLocation } from '@tanstack/react-router'
-import { Bell } from 'lucide-react'
+import { ArrowLeft, Bell } from 'lucide-react'
 import { useWorkspaceRole } from '@/hooks/use-workspace-role'
 import { getTenantIdFromPath, isSuperAdminPath } from '@/lib/navigation-context'
 import { Button } from '@/components/ui/button'
@@ -140,6 +140,14 @@ export function AppToolbar() {
         </div>
 
         <div className='flex shrink-0 flex-wrap items-center gap-2 self-start md:justify-end'>
+          {!superAdminMode ? (
+            <Button asChild variant='outline' className='sm:inline-flex'>
+              <Link to='/super-admin/tenants'>
+                <ArrowLeft className='size-4' />
+                Back to Workspaces
+              </Link>
+            </Button>
+          ) : null}
           <ThemeSwitch />
           <Button variant='outline' size='icon' aria-label='Notifications' className='rounded-full'>
             <Bell className='size-4' />

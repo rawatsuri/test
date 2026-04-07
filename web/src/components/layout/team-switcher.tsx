@@ -1,4 +1,6 @@
 import * as React from 'react'
+import { Link } from '@tanstack/react-router'
+import { ArrowLeft } from 'lucide-react'
 import {
   SidebarMenu,
   SidebarMenuButton,
@@ -11,9 +13,13 @@ type TeamSwitcherProps = {
     logo: React.ElementType
     plan: string
   }[]
+  exitLink?: {
+    label: string
+    to: '/super-admin/tenants'
+  }
 }
 
-export function TeamSwitcher({ teams }: TeamSwitcherProps) {
+export function TeamSwitcher({ teams, exitLink }: TeamSwitcherProps) {
   const activeTeam = teams[0]
 
   return (
@@ -34,6 +40,16 @@ export function TeamSwitcher({ teams }: TeamSwitcherProps) {
           </div>
         </SidebarMenuButton>
       </SidebarMenuItem>
+      {exitLink ? (
+        <SidebarMenuItem>
+          <SidebarMenuButton asChild className='rounded-xl text-sidebar-foreground/75 hover:text-sidebar-accent-foreground'>
+            <Link to={exitLink.to}>
+              <ArrowLeft className='size-4' />
+              <span>{exitLink.label}</span>
+            </Link>
+          </SidebarMenuButton>
+        </SidebarMenuItem>
+      ) : null}
     </SidebarMenu>
   )
 }

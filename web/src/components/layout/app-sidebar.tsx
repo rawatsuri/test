@@ -31,11 +31,17 @@ export function AppSidebar() {
       email: authUser?.email ?? baseSidebarData.user.email,
     },
   }
+  const exitLink = isSuperAdminPath(href)
+    ? undefined
+    : {
+        label: 'Back to Workspaces',
+        to: '/super-admin/tenants' as const,
+      }
 
   return (
     <Sidebar collapsible={collapsible} variant={variant}>
       <SidebarHeader>
-        <TeamSwitcher teams={sidebarData.teams} />
+        <TeamSwitcher teams={sidebarData.teams} exitLink={exitLink} />
 
         {/* Replace <TeamSwitch /> with the following <AppTitle />
          /* if you want to use the normal app title instead of TeamSwitch dropdown */}
