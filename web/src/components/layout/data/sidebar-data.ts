@@ -64,43 +64,37 @@ export function getSuperAdminSidebarData(): SidebarData {
   }
 }
 
-export function getTenantSidebarData(tenantId: string): SidebarData {
+export function getTenantSidebarData(
+  tenantId: string,
+  options?: { isWorkspaceManager?: boolean }
+): SidebarData {
   const base = `/tenant/${tenantId}`
-
-  return {
-    user: {
-      name: 'Tenant Admin',
-      email: 'admin@tenant.ai',
-      avatar: '/avatars/user.jpg',
+  const isWorkspaceManager = options?.isWorkspaceManager ?? false
+  const navGroups: SidebarData['navGroups'] = [
+    {
+      title: 'Workspace',
+      items: [
+        {
+          title: 'Overview',
+          url: `${base}/dashboard`,
+          icon: LayoutDashboard,
+        },
+        {
+          title: 'Calls',
+          url: `${base}/calls`,
+          icon: Phone,
+        },
+        {
+          title: 'Callers',
+          url: `${base}/callers`,
+          icon: Users,
+        },
+      ],
     },
-    teams: [
-      {
-        name: 'Workspace',
-        logo: Headphones,
-        plan: 'Operations',
-      },
-    ],
-    navGroups: [
-      {
-        title: 'Workspace',
-        items: [
-          {
-            title: 'Overview',
-            url: `${base}/dashboard`,
-            icon: LayoutDashboard,
-          },
-          {
-            title: 'Calls',
-            url: `${base}/calls`,
-            icon: Phone,
-          },
-          {
-            title: 'Callers',
-            url: `${base}/callers`,
-            icon: Users,
-          },
-        ],
-      },
+  ]
+
+  if (isWorkspaceManager) {
+    navGroups.push(
       {
         title: 'Setup',
         items: [
@@ -151,6 +145,22 @@ export function getTenantSidebarData(tenantId: string): SidebarData {
           },
         ],
       },
+    )
+  }
+
+  return {
+    user: {
+      name: 'Tenant Admin',
+      email: 'admin@tenant.ai',
+      avatar: '/avatars/user.jpg',
+    },
+    teams: [
+      {
+        name: 'Workspace',
+        logo: Headphones,
+        plan: 'Operations',
+      },
     ],
+    navGroups,
   }
 }

@@ -15,6 +15,7 @@ export function SignOutDialog({ open, onOpenChange }: SignOutDialogProps) {
     auth.reset()
     navigate({
       to: '/login',
+      search: { redirect: '/' },
       replace: true,
     })
   }

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 import { toast } from 'sonner'
+import { requireWorkspaceManager } from '@/lib/auth'
 import { useWorkspaceRole } from '@/hooks/use-workspace-role'
 import {
   useCreateTenantUser,
@@ -17,6 +18,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { UserRole } from '@/types'
 
 export const Route = createFileRoute('/_authenticated/tenant/$tenantId/team')({
+  beforeLoad: ({ context, location, params }) => {
+    requireWorkspaceManager(context.auth, params.tenantId, location.href)
+  },
   component: TeamPage,
 })
 

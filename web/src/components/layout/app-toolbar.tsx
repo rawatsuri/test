@@ -1,7 +1,8 @@
 import { Link, useLocation } from '@tanstack/react-router'
 import { ArrowLeft, Bell } from 'lucide-react'
-import { useWorkspaceRole } from '@/hooks/use-workspace-role'
+import { buildRouterAuth } from '@/lib/auth'
 import { getTenantIdFromPath, isSuperAdminPath } from '@/lib/navigation-context'
+import { useAuthStore } from '@/stores/auth-store'
 import { Button } from '@/components/ui/button'
 import { Header } from '@/components/layout/header'
 import { ThemeSwitch } from '@/components/theme-switch'
@@ -114,8 +115,11 @@ export function AppToolbar() {
   const href = useLocation({ select: (location) => location.href })
   const tenantId = getTenantIdFromPath(href)
   const superAdminMode = isSuperAdminPath(href)
-  const { role } = useWorkspaceRole()
-  const meta = getToolbarMeta(href, tenantId, role)
+  const user = useAuthStore((state) => state.auth.user)
+  const accessToken = useAuthStore((state) => state.auth.accessToken)
+  const auth = buildRouterAuth(user, accessToken)
+  const meta = getToolbarMeta(href, tenantId, auth.primaryRole)
+  const canExitToWorkspaces = !superAdminMode && auth.isSuperAdmin
 
   return (
     <Header fixed className='border-b border-border/70 bg-background/90 backdrop-blur supports-[backdrop-filter]:bg-background/78'>
@@ -128,9 +132,9 @@ export function AppToolbar() {
             <h1 className='max-w-full text-xl font-semibold tracking-tight text-foreground sm:text-2xl'>
               {meta.title}
             </h1>
-            {!superAdminMode && role ? (
+            {!superAdminMode && auth.primaryRole ? (
               <span className='rounded-full border border-border/70 bg-card/80 px-2.5 py-1 text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground'>
-                {role}
+                {auth.primaryRole}
               </span>
             ) : null}
           </div>
@@ -140,7 +144,7 @@ export function AppToolbar() {
         </div>
 
         <div className='flex shrink-0 flex-wrap items-center gap-2 self-start md:justify-end'>
-          {!superAdminMode ? (
+          {canExitToWorkspaces ? (
             <Button asChild variant='outline' className='sm:inline-flex'>
               <Link to='/super-admin/tenants'>
                 <ArrowLeft className='size-4' />

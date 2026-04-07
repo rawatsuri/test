@@ -1,20 +1,13 @@
 import { Navigate, createFileRoute } from '@tanstack/react-router'
-import { useAuthStore } from '@/stores/auth-store'
+import { getPostLoginTarget } from '@/lib/auth'
 
 export const Route = createFileRoute('/_authenticated/')({
   component: AuthenticatedIndexRedirect,
 })
 
 function AuthenticatedIndexRedirect() {
-  const user = useAuthStore((state) => state.auth.user)
+  const { auth } = Route.useRouteContext()
+  const target = getPostLoginTarget(auth)
 
-  if (user?.role.includes('SUPER_ADMIN')) {
-    return <Navigate to='/super-admin/dashboard' />
-  }
-
-  if (user?.accountNo) {
-    return <Navigate to='/tenant/$tenantId/dashboard' params={{ tenantId: user.accountNo }} />
-  }
-
-  return <Navigate to='/login' />
+  return <Navigate to={target.to} params={target.params as never} />
 }

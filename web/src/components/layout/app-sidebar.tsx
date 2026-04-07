@@ -1,6 +1,7 @@
 import { useLayout } from '@/context/layout-provider'
 import { useLocation } from '@tanstack/react-router'
 import { getTenantIdFromPath, isSuperAdminPath } from '@/lib/navigation-context'
+import { buildRouterAuth } from '@/lib/auth'
 import { useAuthStore } from '@/stores/auth-store'
 import {
   Sidebar,
@@ -19,10 +20,12 @@ export function AppSidebar() {
   const { collapsible, variant } = useLayout()
   const href = useLocation({ select: (location) => location.href })
   const authUser = useAuthStore((state) => state.auth.user)
+  const accessToken = useAuthStore((state) => state.auth.accessToken)
+  const auth = buildRouterAuth(authUser, accessToken)
   const tenantId = getTenantIdFromPath(href) ?? 'workspace'
   const baseSidebarData = isSuperAdminPath(href)
     ? getSuperAdminSidebarData()
-    : getTenantSidebarData(tenantId)
+    : getTenantSidebarData(tenantId, { isWorkspaceManager: auth.isWorkspaceManager })
   const sidebarData = {
     ...baseSidebarData,
     user: {
@@ -33,10 +36,12 @@ export function AppSidebar() {
   }
   const exitLink = isSuperAdminPath(href)
     ? undefined
-    : {
-        label: 'Back to Workspaces',
-        to: '/super-admin/tenants' as const,
-      }
+    : auth.isSuperAdmin
+      ? {
+          label: 'Back to Workspaces',
+          to: '/super-admin/tenants' as const,
+        }
+      : undefined
 
   return (
     <Sidebar collapsible={collapsible} variant={variant}>

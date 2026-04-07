@@ -4,7 +4,7 @@ import { getCookie, setCookie, removeCookie } from '@/lib/cookies'
 export const ACCESS_TOKEN_COOKIE = 'omni_frontend_access_token'
 export const AUTH_USER_COOKIE = 'omni_frontend_auth_user'
 
-interface AuthUser {
+export interface AuthUser {
   accountNo: string
   email: string
   role: string[]

@@ -1,39 +1,26 @@
-import { useState } from 'react'
 import { useAuthStore } from '@/stores/auth-store'
 
-export type WorkspaceRole = 'OWNER' | 'ADMIN' | 'MEMBER'
-
-const STORAGE_KEY = 'workspace_role'
+export type WorkspaceRole = 'SUPER_ADMIN' | 'OWNER' | 'ADMIN' | 'MEMBER'
 
 export function useWorkspaceRole() {
   const primaryAuthRole = useAuthStore((state) => state.auth.user?.role?.[0] ?? null)
-  const [storedRole, setRoleState] = useState<WorkspaceRole>(() => {
-    const stored = window.localStorage.getItem(STORAGE_KEY) as WorkspaceRole | null
-    if (stored && ['OWNER', 'ADMIN', 'MEMBER'].includes(stored)) return stored
-    return 'ADMIN'
-  })
-
   const role: WorkspaceRole =
-    primaryAuthRole === 'OWNER'
+    primaryAuthRole === 'SUPER_ADMIN'
+      ? 'SUPER_ADMIN'
+      : primaryAuthRole === 'OWNER'
       ? 'OWNER'
       : primaryAuthRole === 'ADMIN'
         ? 'ADMIN'
         : primaryAuthRole === 'MEMBER'
           ? 'MEMBER'
-          : storedRole
+          : 'MEMBER'
 
-  const setRole = (nextRole: WorkspaceRole) => {
-    setRoleState(nextRole)
-    window.localStorage.setItem(STORAGE_KEY, nextRole)
-  }
-
-  const canEditConfig = role !== 'MEMBER'
-  const canManageTeam = role === 'OWNER' || role === 'ADMIN'
-  const canManageCallers = role !== 'MEMBER'
+  const canEditConfig = role === 'SUPER_ADMIN' || role === 'OWNER' || role === 'ADMIN'
+  const canManageTeam = role === 'SUPER_ADMIN' || role === 'OWNER' || role === 'ADMIN'
+  const canManageCallers = role === 'SUPER_ADMIN' || role === 'OWNER' || role === 'ADMIN'
 
   return {
     role,
-    setRole,
     canEditConfig,
     canManageTeam,
     canManageCallers,

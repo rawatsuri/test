@@ -9,6 +9,7 @@ import {
 import { RouterProvider, createRouter } from '@tanstack/react-router'
 import { toast } from 'sonner'
 import { useAuthStore } from '@/stores/auth-store'
+import { buildRouterAuth } from '@/lib/auth'
 import { handleServerError } from '@/lib/handle-server-error'
 import { DirectionProvider } from './context/direction-provider'
 import { FontProvider } from './context/font-provider'
@@ -74,7 +75,7 @@ const queryClient = new QueryClient({
 // Create a new router instance
 const router = createRouter({
   routeTree,
-  context: { queryClient },
+  context: { queryClient, auth: undefined! },
   defaultPreload: 'intent',
   defaultPreloadStaleTime: 0,
 })
@@ -84,6 +85,14 @@ declare module '@tanstack/react-router' {
   interface Register {
     router: typeof router
   }
+}
+
+function AppRouter() {
+  const user = useAuthStore((state) => state.auth.user)
+  const accessToken = useAuthStore((state) => state.auth.accessToken)
+  const auth = buildRouterAuth(user, accessToken)
+
+  return <RouterProvider router={router} context={{ queryClient, auth }} />
 }
 
 // Render the app
@@ -96,7 +105,7 @@ if (!rootElement.innerHTML) {
         <ThemeProvider>
           <FontProvider>
             <DirectionProvider>
-              <RouterProvider router={router} />
+              <AppRouter />
             </DirectionProvider>
           </FontProvider>
         </ThemeProvider>

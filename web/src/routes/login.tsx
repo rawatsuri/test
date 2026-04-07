@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { createFileRoute, redirect, useNavigate } from '@tanstack/react-router'
 import { toast } from 'sonner'
+import { getPostLoginTarget } from '@/lib/auth'
 import { describeFrontendRuntime } from '@/config/runtime'
 import { platformService } from '@/lib/platform-service'
 import { useAuthStore } from '@/stores/auth-store'
@@ -17,10 +18,17 @@ const demoAccounts = [
 ]
 
 export const Route = createFileRoute('/login')({
-  beforeLoad: () => {
-    const token = useAuthStore.getState().auth.accessToken
-    if (token) {
-      throw redirect({ to: '/' })
+  validateSearch: (search: Record<string, unknown>) => ({
+    redirect: typeof search.redirect === 'string' ? search.redirect : '/',
+  }),
+  beforeLoad: ({ context, search }) => {
+    if (context.auth.isAuthenticated) {
+      if (search.redirect && search.redirect !== '/') {
+        throw redirect({ to: search.redirect })
+      }
+
+      const target = getPostLoginTarget(context.auth)
+      throw redirect({ to: target.to, params: target.params })
     }
   },
   component: LoginPage,
@@ -30,6 +38,7 @@ function LoginPage() {
   const navigate = useNavigate()
   const { auth } = useAuthStore()
   const runtime = describeFrontendRuntime()
+  const { redirect: redirectTarget } = Route.useSearch()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -52,7 +61,9 @@ function LoginPage() {
       auth.setAccessToken(result.token)
       auth.setUser(result.user)
 
-      if (result.user.role.includes('SUPER_ADMIN')) {
+      if (redirectTarget && redirectTarget !== '/') {
+        window.location.assign(redirectTarget)
+      } else if (result.user.role.includes('SUPER_ADMIN')) {
         navigate({ to: '/super-admin/dashboard' })
       } else {
         navigate({
