@@ -25,13 +25,8 @@ export const envSchema = z.object({
   // Encryption
   MASTER_ENCRYPTION_KEY: z.string().min(32, 'MASTER_ENCRYPTION_KEY must be at least 32 characters'),
 
-  // Auth (Clerk)
-  CLERK_SECRET_KEY: z.string().optional(),
-  CLERK_PUBLISHABLE_KEY: z.string().optional(),
-  CLERK_WEBHOOK_SECRET: z.string().optional(),
-
-  // Legacy Auth (optional for migration)
-  JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters').optional(),
+  // Local JWT auth
+  JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
   WEBHOOK_SECRET: z.string().optional(),
 
   // Pipecat Server

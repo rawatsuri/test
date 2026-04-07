@@ -7,6 +7,8 @@
     "build": "node -e \"require('fs').rmSync('dist', { recursive: true, force: true })\" && tsc && tsc-alias",
     "start": "node dist/server.js",
     "dev": "nodemon --ext ts --exec tsx src/server.ts",
+    "db:seed:demo": "tsx prisma/seed-demo.ts",
+    "db:reset:demo": "tsx prisma/seed-demo.ts --reset",
     "lint": "eslint . --ext .ts",
     "lint:fix": "eslint . --ext ts --fix",
     "format": "prettier --write .",
@@ -59,8 +61,6 @@
     "vitest": "^3.0.8"
   },
   "dependencies": {
-    "@clerk/clerk-sdk-node": "^5.1.6",
-    "@clerk/express": "^1.7.69",
     "@prisma/client": "^6.19.2",
     "axios": "^1.13.5",
     "bcrypt": "^5.1.1",
@@ -75,7 +75,6 @@
     "pino": "^9.6.0",
     "pino-http": "^10.4.0",
     "pino-pretty": "^13.0.0",
-    "svix": "^1.84.1",
     "uni-response": "^1.0.3",
     "zod": "^3.24.2"
   }

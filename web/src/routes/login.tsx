@@ -1,13 +1,20 @@
 import { useState, type FormEvent } from 'react'
 import { createFileRoute, redirect, useNavigate } from '@tanstack/react-router'
 import { toast } from 'sonner'
-import { describeFrontendRuntime, isMockAuthMode } from '@/config/runtime'
+import { describeFrontendRuntime } from '@/config/runtime'
 import { platformService } from '@/lib/platform-service'
 import { useAuthStore } from '@/stores/auth-store'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+
+const demoAccounts = [
+  { role: 'Super Admin', email: 'owner@aivoice.ai', password: 'Pass@123' },
+  { role: 'Tenant Owner', email: 'owner@sunlight-pediatrics.ai', password: 'Pass@123' },
+  { role: 'Tenant Admin', email: 'admin@sunlight-pediatrics.ai', password: 'Pass@123' },
+  { role: 'Tenant Member', email: 'member@sunlight-pediatrics.ai', password: 'Pass@123' },
+]
 
 export const Route = createFileRoute('/login')({
   beforeLoad: () => {
@@ -27,12 +34,13 @@ function LoginPage() {
   const [password, setPassword] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
 
+  const fillDemoAccount = (account: (typeof demoAccounts)[number]) => {
+    setEmail(account.email)
+    setPassword(account.password)
+  }
+
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    if (!isMockAuthMode) {
-      toast.error('Interactive login is disabled. Switch VITE_AUTH_MODE=mock for local development.')
-      return
-    }
     if (!email.trim() || !password.trim()) {
       toast.error('Email and password are required')
       return
@@ -76,7 +84,6 @@ function LoginPage() {
                 type='email'
                 autoComplete='email'
                 value={email}
-                disabled={!isMockAuthMode}
                 onChange={(event) => setEmail(event.target.value)}
               />
             </div>
@@ -86,26 +93,35 @@ function LoginPage() {
                 type='password'
                 autoComplete='current-password'
                 value={password}
-                disabled={!isMockAuthMode}
                 onChange={(event) => setPassword(event.target.value)}
               />
             </div>
-            <Button className='w-full' type='submit' disabled={!isMockAuthMode || isSubmitting}>
-              {isSubmitting ? 'Signing in...' : isMockAuthMode ? 'Sign in' : 'Mock Auth Disabled'}
+            <Button className='w-full' type='submit' disabled={isSubmitting}>
+              {isSubmitting ? 'Signing in...' : 'Sign in'}
             </Button>
           </form>
 
-          {isMockAuthMode ? (
-            <p className='mt-4 text-xs text-muted-foreground'>
-              Mock login password: <span className='font-medium'>Pass@123</span>
+          <div className='mt-4 space-y-2 text-xs text-muted-foreground'>
+            <p>
+              Demo password: <span className='font-medium'>Pass@123</span>
             </p>
-          ) : (
-            <p className='mt-4 text-xs text-muted-foreground'>
-              This build expects external auth wiring. For local development, set
-              {' '}
-              <span className='font-medium'>VITE_AUTH_MODE=mock</span>.
-            </p>
-          )}
+            <div className='rounded-xl border border-border/70 bg-muted/25 p-3'>
+              <p className='mb-2 font-medium text-foreground'>Seeded demo accounts</p>
+              <div className='grid gap-2'>
+                {demoAccounts.map((account) => (
+                  <button
+                    key={account.email}
+                    type='button'
+                    onClick={() => fillDemoAccount(account)}
+                    className='flex w-full items-center justify-between gap-3 rounded-2xl border border-border/70 bg-background/80 px-3 py-2 text-left transition hover:border-primary/40 hover:bg-primary/5'
+                  >
+                    <span className='font-medium text-foreground'>{account.role}</span>
+                    <span className='text-right font-medium'>{account.email}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
         </CardContent>
       </Card>
     </div>

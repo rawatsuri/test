@@ -1,24 +1,12 @@
 import { Router } from 'express';
 
-import {
-  attachUserContext,
-  getAuthContext,
-  requireApiAuth,
-} from '../../../middleware/clerk-auth.middleware';
-import { ClerkWebhookController } from '../controllers/clerk-webhook.controller';
+import { auth } from '../../../middleware/auth.middleware';
+import { LocalAuthController } from '../controllers/local-auth.controller';
 
 const router = Router();
-const clerkWebhookController = new ClerkWebhookController();
+const localAuthController = new LocalAuthController();
 
-// Clerk webhook endpoint (public, signature verified in controller)
-router.post('/webhook/clerk', clerkWebhookController.handleWebhook);
-
-// Get current authenticated user info
-router.get('/me', requireApiAuth, attachUserContext, (req, res) => {
-  res.json({
-    success: true,
-    data: getAuthContext(req),
-  });
-});
+router.post('/login', localAuthController.login);
+router.get('/me', auth, localAuthController.me);
 
 export default router;

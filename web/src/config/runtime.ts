@@ -1,8 +1,8 @@
-type FrontendAuthMode = 'mock' | 'clerk'
+type FrontendAuthMode = 'mock' | 'local'
 type FrontendDataMode = 'mock' | 'api'
 
 function normalizeAuthMode(value: string | undefined): FrontendAuthMode {
-  return value === 'clerk' ? 'clerk' : 'mock'
+  return value === 'mock' ? 'mock' : 'local'
 }
 
 function normalizeDataMode(value: string | undefined): FrontendDataMode {
@@ -18,7 +18,7 @@ export const frontendDataMode = normalizeDataMode(
 )
 
 export const isMockAuthMode = frontendAuthMode === 'mock'
-export const isClerkAuthMode = frontendAuthMode === 'clerk'
+export const isLocalAuthMode = frontendAuthMode === 'local'
 export const isMockDataMode = frontendDataMode === 'mock'
 export const isApiDataMode = frontendDataMode === 'api'
 

@@ -96,7 +96,6 @@ export interface UpdateTenantRequest {
 
 export interface User {
   id: string
-  clerkId: string
   email: string
   name: string | null
   role: UserRole

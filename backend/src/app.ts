@@ -1,4 +1,3 @@
-import { clerkMiddleware } from '@clerk/express';
 import cors from 'cors';
 import express, { Application, Request, Response } from 'express';
 import helmet from 'helmet';
@@ -36,11 +35,7 @@ import exotelWebhookRoutes from './features/webhooks/exotel/exotel.routes';
 import plivoWebhookRoutes from './features/webhooks/plivo/plivo.routes';
 import twilioWebhookRoutes from './features/webhooks/twilio/twilio.routes';
 import { apiErrorHandler, unmatchedRoutes } from './middleware/api-error.middleware';
-import {
-  attachUserContext,
-  requireApiAuth,
-  requireTenantScope,
-} from './middleware/clerk-auth.middleware';
+import { auth, tenantScope } from './middleware/auth.middleware';
 import { loggerMiddleware, pinoLogger } from './middleware/pino-logger';
 import { rateLimiter } from './middleware/security.middleware';
 
@@ -62,13 +57,6 @@ app.use('/events', pipecatHttpProxy);           // Pipecat events
 app.use('/recordings', pipecatHttpProxy);       // Pipecat recordings
 app.use('/conversations', pipecatHttpProxy);    // Pipecat conversation API
 
-if (env.NODE_ENV === 'production' && env.CLERK_SECRET_KEY && env.CLERK_PUBLISHABLE_KEY) {
-  app.use(clerkMiddleware());
-} else if (env.NODE_ENV === 'production') {
-  console.warn('Clerk keys not configured. Skipping Clerk middleware in this environment.');
-} else {
-  console.info('Running without Clerk middleware in non-production mode.');
-}
 if (env.NODE_ENV === 'production') {
   app.use(loggerMiddleware);
   app.use(pinoLogger);
@@ -84,59 +72,15 @@ app.get('/heartbeat', (req: Request, res: Response): void => {
 });
 
 app.use('/v1/auth', authRoutes);
+app.use('/v1/tenants', auth, tenantRoutes);
+app.use('/v1/tenants/:tenantId/users', auth, tenantScope, userRoutes);
+app.use('/v1/tenants/:tenantId/agent-config', auth, tenantScope, agentConfigRoutes);
+app.use('/v1/tenants/:tenantId/phone-numbers', auth, tenantScope, phoneNumberRoutes);
+app.use('/v1/tenants/:tenantId/calls', auth, tenantScope, callRoutes);
+app.use('/v1/tenants/:tenantId/callers', auth, tenantScope, callerRoutes);
+app.use('/v1/tenants/:tenantId/knowledge', auth, tenantScope, knowledgeRoutes);
 
-if (env.NODE_ENV === 'production') {
-  app.use('/v1/tenants', requireApiAuth, attachUserContext, tenantRoutes);
-  app.use(
-    '/v1/tenants/:tenantId/users',
-    requireApiAuth,
-    attachUserContext,
-    requireTenantScope('tenantId'),
-    userRoutes,
-  );
-  app.use(
-    '/v1/tenants/:tenantId/agent-config',
-    requireApiAuth,
-    attachUserContext,
-    requireTenantScope('tenantId'),
-    agentConfigRoutes,
-  );
-  app.use(
-    '/v1/tenants/:tenantId/phone-numbers',
-    requireApiAuth,
-    attachUserContext,
-    requireTenantScope('tenantId'),
-    phoneNumberRoutes,
-  );
-  app.use(
-    '/v1/tenants/:tenantId/calls',
-    requireApiAuth,
-    attachUserContext,
-    requireTenantScope('tenantId'),
-    callRoutes,
-  );
-  app.use(
-    '/v1/tenants/:tenantId/callers',
-    requireApiAuth,
-    attachUserContext,
-    requireTenantScope('tenantId'),
-    callerRoutes,
-  );
-  app.use(
-    '/v1/tenants/:tenantId/knowledge',
-    requireApiAuth,
-    attachUserContext,
-    requireTenantScope('tenantId'),
-    knowledgeRoutes,
-  );
-} else {
-  app.use('/v1/tenants', tenantRoutes);
-  app.use('/v1/tenants/:tenantId/users', userRoutes);
-  app.use('/v1/tenants/:tenantId/agent-config', agentConfigRoutes);
-  app.use('/v1/tenants/:tenantId/phone-numbers', phoneNumberRoutes);
-  app.use('/v1/tenants/:tenantId/calls', callRoutes);
-  app.use('/v1/tenants/:tenantId/callers', callerRoutes);
-  app.use('/v1/tenants/:tenantId/knowledge', knowledgeRoutes);
+if (env.NODE_ENV !== 'production') {
   app.use('/test', testRoutes);
 }
 

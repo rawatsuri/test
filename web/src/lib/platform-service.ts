@@ -158,7 +158,6 @@ function createSeedDb(): MockDb {
     users.push(
       {
         id: id('user'),
-        clerkId: id('clerk'),
         email: `owner@${tenant.slug}.com`,
         name: 'Workspace Owner',
         role: UserRole.OWNER,
@@ -168,7 +167,6 @@ function createSeedDb(): MockDb {
       },
       {
         id: id('user'),
-        clerkId: id('clerk'),
         email: `admin@${tenant.slug}.com`,
         name: 'Sub Admin',
         role: UserRole.ADMIN,
@@ -801,7 +799,6 @@ export const platformService = {
         const now = nowIso()
         const user: User = {
           id: id('user'),
-          clerkId: id('clerk'),
           email: payload.email,
           name: payload.name ?? null,
           role: payload.role,
@@ -871,9 +868,18 @@ export const platformService = {
         },
       }
     }
-    throw new Error(
-      'Interactive login is only available in mock auth mode. Switch VITE_AUTH_MODE=mock or integrate Clerk sign-in.'
-    )
+    const response = await api.post<
+      ApiEnvelope<{
+        token: string
+        user: {
+          accountNo: string
+          email: string
+          role: string[]
+          exp: number
+        }
+      }>
+    >('/v1/auth/login', { email, password })
+    return unwrapApiData(response.data)
   },
   async getBookingOrders(tenantId: string, filters?: Record<string, string>) {
     if (isMockDataMode) return listMockBookingOrders(tenantId, filters)

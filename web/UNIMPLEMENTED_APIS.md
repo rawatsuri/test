@@ -74,7 +74,7 @@ These screens remain frontend-only when `VITE_DATA_MODE=mock`:
 3. bookings/orders CRUD routes
 4. omnichannel conversation/channel/automation routes
 5. invitation workflow routes for team onboarding
-6. richer `GET /v1/auth/me` payload once Clerk-backed frontend auth is enabled
+6. optional registration and invitation flow for local-auth onboarding
 
 ## Response Contract
 

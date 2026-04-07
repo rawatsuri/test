@@ -1,6 +1,7 @@
 import { Router } from 'express';
 
 import { PrismaService } from '../../../config/prisma.config';
+import { requireRole } from '../../../middleware/auth.middleware';
 import { validateRequest } from '../../../middleware/validation.middleware';
 import { PhoneNumberController } from '../controllers/phone-number.controller';
 import { PhoneNumberRepository } from '../repositories/phone-number.repository';
@@ -17,14 +18,15 @@ const phoneNumberController = new PhoneNumberController(phoneNumberService);
 const router = Router({ mergeParams: true });
 
 // Phone number routes for a tenant
-router.post('/', validateRequest(createPhoneNumberSchema), phoneNumberController.create);
+router.post('/', requireRole(['OWNER', 'ADMIN', 'SUPER_ADMIN']), validateRequest(createPhoneNumberSchema), phoneNumberController.create);
 router.get('/', phoneNumberController.getAll);
 router.get('/:phoneNumberId', phoneNumberController.getById);
 router.put(
   '/:phoneNumberId',
+  requireRole(['OWNER', 'ADMIN', 'SUPER_ADMIN']),
   validateRequest(updatePhoneNumberSchema),
   phoneNumberController.update,
 );
-router.delete('/:phoneNumberId', phoneNumberController.delete);
+router.delete('/:phoneNumberId', requireRole(['OWNER', 'ADMIN', 'SUPER_ADMIN']), phoneNumberController.delete);
 
 export default router;

@@ -5,14 +5,13 @@ import { CreateUserInput, UpdateUserInput } from '../schemas/user.schema';
 export class UserRepository {
   constructor(private prisma: PrismaClient) {}
 
-  async create(data: CreateUserInput & { clerkId: string }): Promise<User> {
+  async create(data: CreateUserInput): Promise<User> {
     return this.prisma.user.create({
       data: {
         email: data.email,
         name: data.name,
         role: data.role,
         tenantId: data.tenantId,
-        clerkId: data.clerkId,
         active: true,
       },
     });
@@ -21,12 +20,6 @@ export class UserRepository {
   async findById(id: string): Promise<User | null> {
     return this.prisma.user.findUnique({
       where: { id },
-    });
-  }
-
-  async findByClerkId(clerkId: string): Promise<User | null> {
-    return this.prisma.user.findUnique({
-      where: { clerkId },
     });
   }
 

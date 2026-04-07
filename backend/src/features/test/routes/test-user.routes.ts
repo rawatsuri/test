@@ -24,7 +24,6 @@ router.post('/tenants/:tenantId/users', async (req, res) => {
         role: req.body.role || 'MEMBER',
         tenantId,
       },
-      req.body.clerkId || `clerk-${Date.now()}`,
     );
     res.json(result);
   } catch (error) {

@@ -8,7 +8,6 @@ export class UserService {
 
   async createUser(
     data: CreateUserInput,
-    clerkId: string,
   ): Promise<{ success: boolean; data?: User; error?: string }> {
     try {
       // Check if user already exists in this tenant
@@ -20,7 +19,7 @@ export class UserService {
         };
       }
 
-      const user = await this.userRepository.create({ ...data, clerkId });
+      const user = await this.userRepository.create(data);
 
       return {
         success: true,

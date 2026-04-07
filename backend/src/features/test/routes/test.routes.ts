@@ -1,4 +1,3 @@
-import { getAuth } from '@clerk/express';
 import { Request, Response } from 'express';
 import { Router } from 'express';
 
@@ -18,24 +17,19 @@ router.use('/', cleanupTestRoutes);
  * These routes bypass normal validation for quick testing
  */
 
-// Test Clerk authentication
 router.get('/auth-test', (req: Request, res: Response) => {
-  const auth = getAuth(req);
-
   res.json({
     success: true,
     message: 'Auth test endpoint',
-    authenticated: !!auth?.userId,
-    userId: auth?.userId || null,
-    hasAuthObject: !!auth,
+    authenticated: !!req.userId,
+    userId: req.userId || null,
+    tenantId: req.tenantId || null,
+    role: req.userRole || null,
   });
 });
 
-// Test with required auth (will return 401 if not authenticated)
 router.get('/auth-required', (req: Request, res: Response) => {
-  const auth = getAuth(req);
-
-  if (!auth?.userId) {
+  if (!req.userId) {
     res.status(401).json({
       success: false,
       message: 'Authentication required',
@@ -46,7 +40,7 @@ router.get('/auth-required', (req: Request, res: Response) => {
   res.json({
     success: true,
     message: 'Protected endpoint',
-    userId: auth.userId,
+    userId: req.userId,
   });
 });
 

@@ -1,6 +1,5 @@
 import { NextFunction, Request, Response } from 'express';
 
-import { env } from '../../../config/env-config';
 import { CreateUserInput, UpdateUserInput } from '../schemas/user.schema';
 import { UserService } from '../services/user.service';
 
@@ -14,22 +13,7 @@ export class UserController {
   ): Promise<void> => {
     try {
       const { tenantId } = req.params;
-      const requestAuth = (req as any).auth as { userId?: string } | undefined;
-      const clerkId =
-        requestAuth?.userId ||
-        (env.NODE_ENV !== 'production'
-          ? (req.body as any).clerkId || `test-clerk-${Date.now()}`
-          : undefined);
-
-      if (!clerkId) {
-        res.status(401).json({
-          success: false,
-          error: 'Authenticated Clerk user is required',
-        });
-        return;
-      }
-
-      const result = await this.userService.createUser({ ...req.body, tenantId }, clerkId);
+      const result = await this.userService.createUser({ ...req.body, tenantId });
 
       if (!result.success) {
         res.status(400).json(result);

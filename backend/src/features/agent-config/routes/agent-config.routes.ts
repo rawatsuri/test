@@ -1,6 +1,7 @@
 import { Router } from 'express';
 
 import { PrismaService } from '../../../config/prisma.config';
+import { requireRole } from '../../../middleware/auth.middleware';
 import { validateRequest } from '../../../middleware/validation.middleware';
 import { AgentConfigController } from '../controllers/agent-config.controller';
 import { AgentConfigRepository } from '../repositories/agent-config.repository';
@@ -17,9 +18,9 @@ const agentConfigController = new AgentConfigController(agentConfigService);
 const router = Router({ mergeParams: true });
 
 // Agent config routes for a tenant
-router.post('/', validateRequest(createAgentConfigSchema), agentConfigController.create);
+router.post('/', requireRole(['OWNER', 'ADMIN', 'SUPER_ADMIN']), validateRequest(createAgentConfigSchema), agentConfigController.create);
 router.get('/', agentConfigController.getByTenantId);
-router.put('/', validateRequest(updateAgentConfigSchema), agentConfigController.update);
-router.delete('/', agentConfigController.delete);
+router.put('/', requireRole(['OWNER', 'ADMIN', 'SUPER_ADMIN']), validateRequest(updateAgentConfigSchema), agentConfigController.update);
+router.delete('/', requireRole(['OWNER', 'ADMIN', 'SUPER_ADMIN']), agentConfigController.delete);
 
 export default router;
