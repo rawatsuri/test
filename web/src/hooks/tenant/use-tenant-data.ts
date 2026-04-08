@@ -4,6 +4,8 @@ import type {
   CreateKnowledgeRequest,
   CreatePhoneNumberRequest,
   CreateUserRequest,
+  UpdateKnowledgeRequest,
+  UpdatePhoneNumberRequest,
   UpdateAgentConfigRequest,
   UpdateUserRequest,
 } from '@/types'
@@ -128,6 +130,18 @@ export function useDeleteTenantPhoneNumber(tenantId: string) {
   })
 }
 
+export function useUpdateTenantPhoneNumber(tenantId: string, phoneNumberId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (payload: UpdatePhoneNumberRequest) => {
+      return unwrap(await platformService.updatePhoneNumber(tenantId, phoneNumberId, payload))
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tenant-phone-numbers', tenantId] })
+    },
+  })
+}
+
 export function useTenantKnowledge(tenantId: string) {
   return useQuery({
     queryKey: ['tenant-knowledge', tenantId],
@@ -155,6 +169,18 @@ export function useDeleteTenantKnowledge(tenantId: string) {
   return useMutation({
     mutationFn: async (knowledgeId: string) => {
       await platformService.deleteKnowledge(tenantId, knowledgeId)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tenant-knowledge', tenantId] })
+    },
+  })
+}
+
+export function useUpdateTenantKnowledge(tenantId: string, knowledgeId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (payload: UpdateKnowledgeRequest) => {
+      return unwrap(await platformService.updateKnowledge(tenantId, knowledgeId, payload))
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tenant-knowledge', tenantId] })

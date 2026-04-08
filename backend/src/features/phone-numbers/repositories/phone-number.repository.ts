@@ -31,7 +31,7 @@ export class PhoneNumberRepository {
 
   async findByTenant(tenantId: string): Promise<PhoneNumber[]> {
     return this.prisma.phoneNumber.findMany({
-      where: { tenantId },
+      where: { tenantId, isActive: true },
       orderBy: { createdAt: 'desc' },
     });
   }
@@ -49,6 +49,19 @@ export class PhoneNumberRepository {
   async delete(id: string): Promise<PhoneNumber> {
     return this.prisma.phoneNumber.delete({
       where: { id },
+    });
+  }
+
+  async deactivate(id: string): Promise<PhoneNumber> {
+    return this.prisma.phoneNumber.update({
+      where: { id },
+      data: { isActive: false },
+    });
+  }
+
+  async countCalls(id: string): Promise<number> {
+    return this.prisma.call.count({
+      where: { phoneNumberId: id },
     });
   }
 

@@ -1,13 +1,16 @@
 import { NextFunction, Request, Response } from 'express';
 
-import { CreatePhoneNumberInput, UpdatePhoneNumberInput } from '../schemas/phone-number.schema';
+import {
+  CreatePhoneNumberBodyInput,
+  UpdatePhoneNumberInput,
+} from '../schemas/phone-number.schema';
 import { PhoneNumberService } from '../services/phone-number.service';
 
 export class PhoneNumberController {
   constructor(private phoneNumberService: PhoneNumberService) {}
 
   create = async (
-    req: Request<{ tenantId: string }, {}, CreatePhoneNumberInput>,
+    req: Request<{ tenantId: string }, {}, CreatePhoneNumberBodyInput>,
     res: Response,
     next: NextFunction,
   ): Promise<void> => {

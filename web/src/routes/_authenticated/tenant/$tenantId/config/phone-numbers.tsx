@@ -1,11 +1,13 @@
 import { useState } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 import { toast } from 'sonner'
+import { getApiErrorMessage } from '@/lib/api-error-message'
 import { useWorkspaceRole } from '@/hooks/use-workspace-role'
 import {
   useCreateTenantPhoneNumber,
   useDeleteTenantPhoneNumber,
   useTenantPhoneNumbers,
+  useUpdateTenantPhoneNumber,
 } from '@/hooks/tenant/use-tenant-data'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -51,7 +53,7 @@ function PhoneNumbersPage() {
           setNumber('')
           setLabel('')
         },
-        onError: () => toast.error('Failed to add phone number'),
+        onError: (error) => toast.error(getApiErrorMessage(error, 'Failed to add phone number')),
       },
     )
   }
@@ -131,27 +133,19 @@ function PhoneNumbersPage() {
           ) : null}
 
           {numbersQuery.data?.map((phone) => (
-            <div key={phone.id} className='flex items-center justify-between rounded-lg border p-3'>
-              <div>
-                <p className='text-sm font-medium'>{phone.number}</p>
-                <p className='text-xs text-muted-foreground'>
-                  {phone.provider} - {phone.label || 'No label'}
-                </p>
-              </div>
-              <Button
-                variant='outline'
-                size='sm'
-                disabled={!canEditConfig || deleteNumber.isPending}
-                onClick={() =>
-                  deleteNumber.mutate(phone.id, {
-                    onSuccess: () => toast.success('Phone number removed'),
-                    onError: () => toast.error('Failed to remove phone number'),
-                  })
-                }
-              >
-                Remove
-              </Button>
-            </div>
+            <PhoneNumberRow
+              key={phone.id}
+              phone={phone}
+              canEditConfig={canEditConfig}
+              deleting={deleteNumber.isPending}
+              tenantId={tenantId}
+              onDelete={() =>
+                deleteNumber.mutate(phone.id, {
+                  onSuccess: () => toast.success('Phone number removed'),
+                  onError: (error) => toast.error(getApiErrorMessage(error, 'Failed to remove phone number')),
+                })
+              }
+            />
           ))}
 
           {!numbersQuery.isLoading && !numbersQuery.isError && !numbersQuery.data?.length ? (
@@ -159,6 +153,61 @@ function PhoneNumbersPage() {
           ) : null}
         </CardContent>
       </Card>
+    </div>
+  )
+}
+
+function PhoneNumberRow({
+  tenantId,
+  phone,
+  canEditConfig,
+  deleting,
+  onDelete,
+}: {
+  tenantId: string
+  phone: { id: string; number: string; provider: Provider; label: string | null; isActive: boolean }
+  canEditConfig: boolean
+  deleting: boolean
+  onDelete: () => void
+}) {
+  const updateNumber = useUpdateTenantPhoneNumber(tenantId, phone.id)
+  const [label, setLabel] = useState(phone.label ?? '')
+
+  return (
+    <div className='flex flex-col gap-3 rounded-lg border p-3'>
+      <div className='flex items-center justify-between gap-4'>
+        <div>
+          <p className='text-sm font-medium'>{phone.number}</p>
+          <p className='text-xs text-muted-foreground'>
+            {phone.provider} · {phone.isActive ? 'Active' : 'Inactive'}
+          </p>
+        </div>
+        <div className='flex items-center gap-2'>
+          <Button
+            variant='outline'
+            size='sm'
+            disabled={!canEditConfig || updateNumber.isPending}
+            onClick={() =>
+              updateNumber.mutate(
+                { label },
+                {
+                  onSuccess: () => toast.success('Phone number updated'),
+                  onError: (error) => toast.error(getApiErrorMessage(error, 'Failed to update phone number')),
+                },
+              )
+            }
+          >
+            Save
+          </Button>
+          <Button variant='outline' size='sm' disabled={!canEditConfig || deleting} onClick={onDelete}>
+            Remove
+          </Button>
+        </div>
+      </div>
+      <div className='space-y-2'>
+        <Label>Label</Label>
+        <Input value={label} disabled={!canEditConfig} onChange={(event) => setLabel(event.target.value)} />
+      </div>
     </div>
   )
 }

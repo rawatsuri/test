@@ -1,11 +1,13 @@
 import { useState } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 import { toast } from 'sonner'
+import { getApiErrorMessage } from '@/lib/api-error-message'
 import { useWorkspaceRole } from '@/hooks/use-workspace-role'
 import {
   useCreateTenantKnowledge,
   useDeleteTenantKnowledge,
   useTenantKnowledge,
+  useUpdateTenantKnowledge,
 } from '@/hooks/tenant/use-tenant-data'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -53,7 +55,7 @@ function KnowledgePage() {
           setCategory('')
           setContent('')
         },
-        onError: () => toast.error('Failed to save knowledge item'),
+        onError: (error) => toast.error(getApiErrorMessage(error, 'Failed to save knowledge item')),
       },
     )
   }
@@ -124,25 +126,19 @@ function KnowledgePage() {
           ) : null}
 
           {knowledgeItems.map((item) => (
-            <div key={item.id} className='flex items-center justify-between rounded-lg border p-3'>
-              <div>
-                <p className='text-sm font-medium'>{item.title}</p>
-                <p className='text-xs text-muted-foreground'>{item.category || 'General'}</p>
-              </div>
-              <Button
-                variant='outline'
-                size='sm'
-                disabled={!canEditConfig || deleteKnowledge.isPending}
-                onClick={() =>
-                  deleteKnowledge.mutate(item.id, {
-                    onSuccess: () => toast.success('Knowledge item removed'),
-                    onError: () => toast.error('Failed to remove knowledge item'),
-                  })
-                }
-              >
-                Remove
-              </Button>
-            </div>
+            <KnowledgeRow
+              key={item.id}
+              tenantId={tenantId}
+              item={item}
+              canEditConfig={canEditConfig}
+              deleting={deleteKnowledge.isPending}
+              onDelete={() =>
+                deleteKnowledge.mutate(item.id, {
+                  onSuccess: () => toast.success('Knowledge item removed'),
+                  onError: (error) => toast.error(getApiErrorMessage(error, 'Failed to remove knowledge item')),
+                })
+              }
+            />
           ))}
 
           {!knowledgeQuery.isLoading && !knowledgeQuery.isError && !knowledgeItems.length ? (
@@ -150,6 +146,77 @@ function KnowledgePage() {
           ) : null}
         </CardContent>
       </Card>
+    </div>
+  )
+}
+
+function KnowledgeRow({
+  tenantId,
+  item,
+  canEditConfig,
+  deleting,
+  onDelete,
+}: {
+  tenantId: string
+  item: { id: string; title: string; category: string | null; content: string }
+  canEditConfig: boolean
+  deleting: boolean
+  onDelete: () => void
+}) {
+  const updateKnowledge = useUpdateTenantKnowledge(tenantId, item.id)
+  const [title, setTitle] = useState(item.title)
+  const [category, setCategory] = useState(item.category ?? '')
+  const [content, setContent] = useState(item.content)
+
+  return (
+    <div className='space-y-3 rounded-lg border p-3'>
+      <div className='grid gap-3 sm:grid-cols-2'>
+        <div className='space-y-2'>
+          <Label>Title</Label>
+          <Input value={title} disabled={!canEditConfig} onChange={(event) => setTitle(event.target.value)} />
+        </div>
+        <div className='space-y-2'>
+          <Label>Category</Label>
+          <Input
+            value={category}
+            disabled={!canEditConfig}
+            onChange={(event) => setCategory(event.target.value)}
+          />
+        </div>
+      </div>
+      <div className='space-y-2'>
+        <Label>Content</Label>
+        <Textarea
+          rows={4}
+          value={content}
+          disabled={!canEditConfig}
+          onChange={(event) => setContent(event.target.value)}
+        />
+      </div>
+      <div className='flex items-center justify-between gap-3'>
+        <p className='text-xs text-muted-foreground'>{item.category || 'General'}</p>
+        <div className='flex items-center gap-2'>
+          <Button
+            variant='outline'
+            size='sm'
+            disabled={!canEditConfig || updateKnowledge.isPending}
+            onClick={() =>
+              updateKnowledge.mutate(
+                { title, category, content },
+                {
+                  onSuccess: () => toast.success('Knowledge item updated'),
+                  onError: (error) => toast.error(getApiErrorMessage(error, 'Failed to update knowledge item')),
+                },
+              )
+            }
+          >
+            Save
+          </Button>
+          <Button variant='outline' size='sm' disabled={!canEditConfig || deleting} onClick={onDelete}>
+            Remove
+          </Button>
+        </div>
+      </div>
     </div>
   )
 }

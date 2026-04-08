@@ -1,6 +1,7 @@
 import { Link, createFileRoute } from '@tanstack/react-router'
 import { ShieldAlert } from 'lucide-react'
 import { getPostLoginTarget } from '@/lib/auth'
+import { useAuthStore } from '@/stores/auth-store'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 
@@ -20,6 +21,7 @@ export const Route = createFileRoute('/unauthorized')({
 
 function UnauthorizedPage() {
   const { auth } = Route.useRouteContext()
+  const { auth: authStore } = useAuthStore()
   const search = Route.useSearch()
   const homeTarget = getPostLoginTarget(auth)
   const message =
@@ -42,6 +44,15 @@ function UnauthorizedPage() {
             <Link to={homeTarget.to} params={homeTarget.params as never}>
               Go to allowed home
             </Link>
+          </Button>
+          <Button
+            variant='outline'
+            onClick={() => {
+              authStore.reset()
+              window.location.assign('/login?redirect=/')
+            }}
+          >
+            Switch account
           </Button>
           <Button asChild variant='outline'>
             <Link to='/login' search={{ redirect: '/' }}>

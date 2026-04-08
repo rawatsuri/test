@@ -26,6 +26,7 @@ import {
   type Tenant,
   type UpdateAgentConfigRequest,
   type UpdateKnowledgeRequest,
+  type UpdatePhoneNumberRequest,
   type UpdateTenantRequest,
   type UpdateUserRequest,
   type User,
@@ -729,6 +730,21 @@ export const platformService = {
       })
     }
     const response = await api.post<ApiEnvelope<PhoneNumber>>(`/v1/tenants/${tenantId}/phone-numbers`, payload)
+    return response.data
+  },
+  async updatePhoneNumber(tenantId: string, phoneNumberId: string, payload: UpdatePhoneNumberRequest) {
+    if (isMockDataMode) {
+      return withDb((db) => {
+        const item = db.phoneNumbers.find((row) => row.tenantId === tenantId && row.id === phoneNumberId)
+        if (!item) throw new Error('Phone number not found')
+        Object.assign(item, payload)
+        return envelope(item)
+      })
+    }
+    const response = await api.put<ApiEnvelope<PhoneNumber>>(
+      `/v1/tenants/${tenantId}/phone-numbers/${phoneNumberId}`,
+      payload
+    )
     return response.data
   },
   async deletePhoneNumber(tenantId: string, phoneNumberId: string) {

@@ -25,12 +25,8 @@ export const Route = createFileRoute('/login')({
   validateSearch: (search: Record<string, unknown>) => ({
     redirect: typeof search.redirect === 'string' ? search.redirect : '/',
   }),
-  beforeLoad: ({ context, search }) => {
+  beforeLoad: ({ context }) => {
     if (context.auth.isAuthenticated) {
-      if (search.redirect && search.redirect !== '/') {
-        throw redirect({ to: search.redirect })
-      }
-
       const target = getPostLoginTarget(context.auth)
       throw redirect({ to: target.to, params: target.params })
     }
@@ -42,7 +38,6 @@ function LoginPage() {
   const navigate = useNavigate()
   const { auth } = useAuthStore()
   const runtime = describeFrontendRuntime()
-  const { redirect: redirectTarget } = Route.useSearch()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -65,9 +60,7 @@ function LoginPage() {
       auth.setAccessToken(result.token)
       auth.setUser(result.user)
 
-      if (redirectTarget && redirectTarget !== '/') {
-        window.location.assign(redirectTarget)
-      } else if (result.user.role.includes('SUPER_ADMIN')) {
+      if (result.user.role.includes('SUPER_ADMIN')) {
         navigate({ to: '/super-admin/dashboard' })
       } else {
         navigate({

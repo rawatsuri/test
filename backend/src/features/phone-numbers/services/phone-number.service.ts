@@ -119,7 +119,13 @@ export class PhoneNumberService {
         };
       }
 
-      await this.phoneNumberRepository.delete(id);
+      const linkedCalls = await this.phoneNumberRepository.countCalls(id);
+
+      if (linkedCalls > 0) {
+        await this.phoneNumberRepository.deactivate(id);
+      } else {
+        await this.phoneNumberRepository.delete(id);
+      }
 
       return {
         success: true,

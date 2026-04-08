@@ -1,13 +1,13 @@
 import { NextFunction, Request, Response } from 'express';
 
-import { CreateUserInput, UpdateUserInput } from '../schemas/user.schema';
+import { CreateUserBodyInput, UpdateUserInput } from '../schemas/user.schema';
 import { UserService } from '../services/user.service';
 
 export class UserController {
   constructor(private userService: UserService) {}
 
   create = async (
-    req: Request<{ tenantId: string }, {}, CreateUserInput>,
+    req: Request<{ tenantId: string }, {}, CreateUserBodyInput>,
     res: Response,
     next: NextFunction,
   ): Promise<void> => {

@@ -36,7 +36,7 @@ export class UserRepository {
 
   async findByTenant(tenantId: string): Promise<User[]> {
     return this.prisma.user.findMany({
-      where: { tenantId },
+      where: { tenantId, active: true },
       orderBy: { createdAt: 'desc' },
     });
   }

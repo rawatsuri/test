@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 import { toast } from 'sonner'
+import { getApiErrorMessage } from '@/lib/api-error-message'
 import { requireWorkspaceManager } from '@/lib/auth'
 import { useWorkspaceRole } from '@/hooks/use-workspace-role'
 import {
@@ -57,7 +58,7 @@ function TeamPage() {
           setName('')
           setEmail('')
         },
-        onError: () => toast.error('Failed to add member'),
+        onError: (error) => toast.error(getApiErrorMessage(error, 'Failed to add member')),
       },
     )
   }
@@ -123,7 +124,7 @@ function TeamPage() {
               onDelete={() =>
                 deleteUser.mutate(user.id, {
                   onSuccess: () => toast.success('Member removed'),
-                  onError: () => toast.error('Failed to remove member'),
+                  onError: (error) => toast.error(getApiErrorMessage(error, 'Failed to remove member')),
                 })
               }
             />
@@ -169,7 +170,7 @@ function TeamRow({
               },
               {
                 onSuccess: () => toast.success('Role updated'),
-                onError: () => toast.error('Failed to update role'),
+                onError: (error) => toast.error(getApiErrorMessage(error, 'Failed to update role')),
               },
             )
           }
