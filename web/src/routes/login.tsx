@@ -11,10 +11,14 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 
 const demoAccounts = [
-  { role: 'Super Admin', email: 'owner@aivoice.ai', password: 'Pass@123' },
-  { role: 'Tenant Owner', email: 'owner@sunlight-pediatrics.ai', password: 'Pass@123' },
-  { role: 'Tenant Admin', email: 'admin@sunlight-pediatrics.ai', password: 'Pass@123' },
-  { role: 'Tenant Member', email: 'member@sunlight-pediatrics.ai', password: 'Pass@123' },
+  { role: 'Super Admin A', email: 'owner@aivoice.ai', password: 'Pass@123' },
+  { role: 'Super Admin B', email: 'ops@aivoice.ai', password: 'Pass@123' },
+  { role: 'Sunlight Owner', email: 'owner@sunlight-pediatrics.ai', password: 'Pass@123' },
+  { role: 'Sunlight Admin', email: 'admin@sunlight-pediatrics.ai', password: 'Pass@123' },
+  { role: 'Sunlight Member', email: 'member@sunlight-pediatrics.ai', password: 'Pass@123' },
+  { role: 'Meadow Owner', email: 'owner@meadow-dental.ai', password: 'Pass@123' },
+  { role: 'Meadow Admin', email: 'admin@meadow-dental.ai', password: 'Pass@123' },
+  { role: 'Meadow Member', email: 'member@meadow-dental.ai', password: 'Pass@123' },
 ]
 
 export const Route = createFileRoute('/login')({

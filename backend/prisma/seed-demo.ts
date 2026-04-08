@@ -85,6 +85,15 @@ async function seedSunlight(passwordHash: string) {
         active: true,
       },
       {
+        id: 'user_super_admin_2',
+        email: 'ops@aivoice.ai',
+        name: 'Platform Operations',
+        passwordHash,
+        role: UserRole.SUPER_ADMIN,
+        tenantId: tenant.id,
+        active: true,
+      },
+      {
         id: 'user_sunlight_owner',
         email: 'owner@sunlight-pediatrics.ai',
         name: 'Dr. Naina Kapoor',
@@ -384,6 +393,15 @@ async function seedMeadow(passwordHash: string) {
         tenantId: tenant.id,
         active: true,
       },
+      {
+        id: 'user_meadow_member',
+        email: 'member@meadow-dental.ai',
+        name: 'Ira Kulkarni',
+        passwordHash,
+        role: UserRole.MEMBER,
+        tenantId: tenant.id,
+        active: true,
+      },
     ],
   });
 
@@ -419,6 +437,14 @@ async function seedMeadow(passwordHash: string) {
         label: 'Front Desk',
         isActive: true,
       },
+      {
+        id: 'num_meadow_followup',
+        number: '+14155550202',
+        provider: Provider.TWILIO,
+        tenantId: tenant.id,
+        label: 'Treatment Follow-up',
+        isActive: true,
+      },
     ],
   });
 
@@ -438,7 +464,135 @@ async function seedMeadow(passwordHash: string) {
         content: 'Dental cleaning, root canal consultation, tooth extraction, aligner consult.',
         category: 'Services',
       },
+      {
+        id: 'know_meadow_pricing',
+        tenantId: tenant.id,
+        title: 'Consultation Pricing',
+        content:
+          'General consultation starts at 700 INR. Cleaning starts at 1800 INR. Aligner consultation starts at 1500 INR.',
+        category: 'Pricing',
+      },
+      {
+        id: 'know_meadow_docs',
+        tenantId: tenant.id,
+        title: 'Documents For First Visit',
+        content:
+          'Carry previous dental scans, current prescriptions, and government ID for the first appointment.',
+        category: 'Onboarding',
+      },
     ],
+  });
+
+  await prisma.caller.createMany({
+    data: [
+      {
+        id: 'caller_meadow_1',
+        tenantId: tenant.id,
+        phoneNumber: '+919810002111',
+        name: 'Vivek Nair',
+        email: 'vivek.nair@example.com',
+        preferences: { language: 'en-IN', treatment: 'cleaning' },
+        metadata: { source: 'voice' },
+        firstCallAt: new Date('2026-04-02T07:20:00.000Z'),
+        lastCallAt: new Date('2026-04-07T09:10:00.000Z'),
+        totalCalls: 2,
+        isSaved: true,
+      },
+      {
+        id: 'caller_meadow_2',
+        tenantId: tenant.id,
+        phoneNumber: '+919810002112',
+        name: 'Sonal Gupta',
+        email: null,
+        preferences: { language: 'hi-IN', treatment: 'root_canal_consult' },
+        metadata: { source: 'voice' },
+        firstCallAt: new Date('2026-04-01T11:40:00.000Z'),
+        lastCallAt: new Date('2026-04-06T12:15:00.000Z'),
+        totalCalls: 3,
+        isSaved: true,
+      },
+      {
+        id: 'caller_meadow_3',
+        tenantId: tenant.id,
+        phoneNumber: '+919810002113',
+        name: 'Neha Sethi',
+        email: 'neha.sethi@example.com',
+        preferences: { language: 'en-IN' },
+        metadata: { source: 'voice', referral: 'instagram' },
+        firstCallAt: new Date('2026-04-03T10:10:00.000Z'),
+        lastCallAt: new Date('2026-04-07T04:45:00.000Z'),
+        totalCalls: 1,
+        isSaved: false,
+        expiresAt: new Date('2026-05-07T04:45:00.000Z'),
+      },
+    ],
+  });
+
+  await createCall({
+    id: 'call_meadow_1',
+    externalId: 'twilio-meadow-001',
+    tenantId: tenant.id,
+    phoneNumberId: 'num_meadow_main',
+    callerId: 'caller_meadow_1',
+    direction: CallDirection.INBOUND,
+    status: CallStatus.COMPLETED,
+    provider: Provider.TWILIO,
+    startedAt: new Date('2026-04-07T09:10:00.000Z'),
+    answeredAt: new Date('2026-04-07T09:10:06.000Z'),
+    endedAt: new Date('2026-04-07T09:13:12.000Z'),
+    durationSecs: 186,
+    summary:
+      'Caller booked a cleaning appointment for Friday evening and confirmed pricing for first-time consultation.',
+    sentiment: Sentiment.POSITIVE,
+    transcripts: [
+      ['AGENT', 'Welcome to Meadow Dental Studio. How can I help you today?'],
+      ['CALLER', 'I want to book a cleaning appointment for Friday evening.'],
+      ['AGENT', 'We have a 6:30 PM slot available, and the cleaning starts at 1800 INR.'],
+      ['CALLER', 'That works for me, please book it.'],
+    ],
+    extraction: {
+      type: 'appointment_booking',
+      data: {
+        intent: 'cleaning_appointment',
+        preferredDate: '2026-04-10',
+        preferredTime: '18:30',
+        pricingDiscussed: true,
+      },
+    },
+    recordingUrl: '/recordings/meadow/call-001.wav',
+  });
+
+  await createCall({
+    id: 'call_meadow_2',
+    externalId: 'twilio-meadow-002',
+    tenantId: tenant.id,
+    phoneNumberId: 'num_meadow_followup',
+    callerId: 'caller_meadow_2',
+    direction: CallDirection.OUTBOUND,
+    status: CallStatus.COMPLETED,
+    provider: Provider.TWILIO,
+    startedAt: new Date('2026-04-06T12:15:00.000Z'),
+    answeredAt: new Date('2026-04-06T12:15:04.000Z'),
+    endedAt: new Date('2026-04-06T12:17:18.000Z'),
+    durationSecs: 134,
+    summary:
+      'Clinic callback confirmed consultation timing for root canal review and reminded the caller to bring prior scans.',
+    sentiment: Sentiment.NEUTRAL,
+    transcripts: [
+      ['AGENT', 'Calling from Meadow Dental Studio regarding your root canal consultation.'],
+      ['CALLER', 'Yes, I wanted to confirm the timing and what I need to bring.'],
+      ['AGENT', 'Your appointment is tomorrow at 4 PM. Please bring your prior scans and prescriptions.'],
+    ],
+    extraction: {
+      type: 'consultation_followup',
+      data: {
+        intent: 'root_canal_consult',
+        scheduledDate: '2026-04-07',
+        scheduledTime: '16:00',
+        reminderGiven: true,
+      },
+    },
+    recordingUrl: '/recordings/meadow/call-002.wav',
   });
 }
 
@@ -575,9 +729,13 @@ async function main() {
   console.log('[seed-demo] Demo login password: Pass@123');
   console.log('[seed-demo] Accounts:');
   console.log('  - Super Admin: owner@aivoice.ai');
+  console.log('  - Super Admin (2): ops@aivoice.ai');
   console.log('  - Tenant Owner: owner@sunlight-pediatrics.ai');
   console.log('  - Tenant Admin: admin@sunlight-pediatrics.ai');
   console.log('  - Tenant Member: member@sunlight-pediatrics.ai');
+  console.log('  - Meadow Owner: owner@meadow-dental.ai');
+  console.log('  - Meadow Admin: admin@meadow-dental.ai');
+  console.log('  - Meadow Member: member@meadow-dental.ai');
 }
 
 main()
