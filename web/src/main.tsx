@@ -9,7 +9,7 @@ import {
 import { RouterProvider, createRouter } from '@tanstack/react-router'
 import { toast } from 'sonner'
 import { useAuthStore } from '@/stores/auth-store'
-import { buildRouterAuth } from '@/lib/auth'
+import { useAppSession } from '@/hooks/use-app-session'
 import { handleServerError } from '@/lib/handle-server-error'
 import { DirectionProvider } from './context/direction-provider'
 import { FontProvider } from './context/font-provider'
@@ -88,9 +88,7 @@ declare module '@tanstack/react-router' {
 }
 
 function AppRouter() {
-  const user = useAuthStore((state) => state.auth.user)
-  const accessToken = useAuthStore((state) => state.auth.accessToken)
-  const auth = buildRouterAuth(user, accessToken)
+  const auth = useAppSession()
 
   return <RouterProvider router={router} context={{ queryClient, auth }} />
 }

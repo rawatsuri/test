@@ -1,8 +1,6 @@
 import { useLayout } from '@/context/layout-provider'
-import { useLocation } from '@tanstack/react-router'
-import { getTenantIdFromPath, isSuperAdminPath } from '@/lib/navigation-context'
-import { buildRouterAuth } from '@/lib/auth'
-import { useAuthStore } from '@/stores/auth-store'
+import { useAppNavigation } from '@/hooks/use-app-navigation'
+import { useAppSession } from '@/hooks/use-app-session'
 import {
   Sidebar,
   SidebarContent,
@@ -18,14 +16,13 @@ import { TeamSwitcher } from './team-switcher'
 
 export function AppSidebar() {
   const { collapsible, variant } = useLayout()
-  const href = useLocation({ select: (location) => location.href })
-  const authUser = useAuthStore((state) => state.auth.user)
-  const accessToken = useAuthStore((state) => state.auth.accessToken)
-  const auth = buildRouterAuth(authUser, accessToken)
-  const tenantId = getTenantIdFromPath(href) ?? 'workspace'
-  const baseSidebarData = isSuperAdminPath(href)
+  const { tenantId, superAdminMode } = useAppNavigation()
+  const auth = useAppSession()
+  const authUser = auth.user
+  const scopedTenantId = tenantId ?? auth.tenantId ?? 'workspace'
+  const baseSidebarData = superAdminMode
     ? getSuperAdminSidebarData()
-    : getTenantSidebarData(tenantId, { isWorkspaceManager: auth.isWorkspaceManager })
+    : getTenantSidebarData(scopedTenantId, { isWorkspaceManager: auth.isWorkspaceManager })
   const sidebarData = {
     ...baseSidebarData,
     user: {
@@ -34,7 +31,7 @@ export function AppSidebar() {
       email: authUser?.email ?? baseSidebarData.user.email,
     },
   }
-  const exitLink = isSuperAdminPath(href)
+  const exitLink = superAdminMode
     ? undefined
     : auth.isSuperAdmin
       ? {

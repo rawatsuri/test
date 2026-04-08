@@ -15,8 +15,10 @@ function buildSessionUser(user: {
   email: string;
   role: string;
 }) {
+  const isSuperAdmin = user.role === 'SUPER_ADMIN';
+
   return {
-    accountNo: user.tenantId,
+    accountNo: isSuperAdmin ? 'platform' : user.tenantId,
     email: user.email,
     role: [user.role],
     exp: Date.now() + 24 * 60 * 60 * 1000,

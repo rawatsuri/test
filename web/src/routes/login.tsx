@@ -1,8 +1,8 @@
 import { useState, type FormEvent } from 'react'
-import { createFileRoute, redirect, useNavigate } from '@tanstack/react-router'
+import { createFileRoute } from '@tanstack/react-router'
 import { toast } from 'sonner'
-import { getPostLoginTarget } from '@/lib/auth'
 import { describeFrontendRuntime } from '@/config/runtime'
+import { buildRouterAuth, getPostLoginPath } from '@/lib/auth'
 import { platformService } from '@/lib/platform-service'
 import { useAuthStore } from '@/stores/auth-store'
 import { Button } from '@/components/ui/button'
@@ -25,17 +25,10 @@ export const Route = createFileRoute('/login')({
   validateSearch: (search: Record<string, unknown>) => ({
     redirect: typeof search.redirect === 'string' ? search.redirect : '/',
   }),
-  beforeLoad: ({ context }) => {
-    if (context.auth.isAuthenticated) {
-      const target = getPostLoginTarget(context.auth)
-      throw redirect({ to: target.to, params: target.params })
-    }
-  },
   component: LoginPage,
 })
 
 function LoginPage() {
-  const navigate = useNavigate()
   const { auth } = useAuthStore()
   const runtime = describeFrontendRuntime()
   const [email, setEmail] = useState('')
@@ -59,15 +52,7 @@ function LoginPage() {
       const result = await platformService.login(email.trim(), password)
       auth.setAccessToken(result.token)
       auth.setUser(result.user)
-
-      if (result.user.role.includes('SUPER_ADMIN')) {
-        navigate({ to: '/super-admin/dashboard' })
-      } else {
-        navigate({
-          to: '/tenant/$tenantId/dashboard',
-          params: { tenantId: result.user.accountNo },
-        })
-      }
+      window.location.replace(getPostLoginPath(buildRouterAuth(result.user, result.token)))
     } catch (error) {
       toast.error((error as Error).message || 'Login failed')
     } finally {

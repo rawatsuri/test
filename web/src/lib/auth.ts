@@ -26,13 +26,14 @@ export function buildRouterAuth(user: AuthUser | null, accessToken: string): Rou
   const isSuperAdmin = normalizedRole === 'SUPER_ADMIN'
   const isWorkspaceManager =
     normalizedRole === 'SUPER_ADMIN' || normalizedRole === 'OWNER' || normalizedRole === 'ADMIN'
+  const tenantId = isSuperAdmin ? null : user?.accountNo ?? null
 
   return {
     accessToken,
     isAuthenticated: Boolean(accessToken && user),
     user,
     primaryRole: normalizedRole,
-    tenantId: user?.accountNo ?? null,
+    tenantId,
     isSuperAdmin,
     isWorkspaceManager,
     canEditConfig: isWorkspaceManager,
@@ -57,6 +58,18 @@ export function getPostLoginTarget(auth: RouterAuth): {
   }
 
   return { to: '/login' }
+}
+
+export function getPostLoginPath(auth: RouterAuth): string {
+  if (auth.isSuperAdmin) {
+    return '/super-admin/dashboard'
+  }
+
+  if (auth.tenantId) {
+    return `/tenant/${auth.tenantId}/dashboard`
+  }
+
+  return '/login'
 }
 
 export function requireAuthenticated(auth: RouterAuth, redirectTo: string) {
