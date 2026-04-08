@@ -23,13 +23,10 @@ export class UserRepository {
     });
   }
 
-  async findByEmail(email: string, tenantId: string): Promise<User | null> {
-    return this.prisma.user.findUnique({
+  async findByEmail(email: string): Promise<User | null> {
+    return this.prisma.user.findFirst({
       where: {
-        tenantId_email: {
-          tenantId,
-          email,
-        },
+        email,
       },
     });
   }

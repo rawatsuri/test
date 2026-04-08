@@ -95,7 +95,7 @@ async function seedSunlight(passwordHash: string) {
         name: 'Platform Owner',
         passwordHash,
         role: UserRole.SUPER_ADMIN,
-        tenantId: tenant.id,
+        tenantId: null,
         active: true,
       },
       {
@@ -104,7 +104,7 @@ async function seedSunlight(passwordHash: string) {
         name: 'Platform Operations',
         passwordHash,
         role: UserRole.SUPER_ADMIN,
-        tenantId: tenant.id,
+        tenantId: null,
         active: true,
       },
       {

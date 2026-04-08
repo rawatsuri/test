@@ -10,7 +10,7 @@ const secret: Secret = env.JWT_SECRET as string;
 // JWT payload for voice platform
 interface AuthPayload {
   userId: string;
-  tenantId: string;
+  tenantId: string | null;
   role: 'OWNER' | 'ADMIN' | 'MEMBER' | 'SUPER_ADMIN';
 }
 
@@ -40,7 +40,7 @@ export function auth(req: Request, res: Response, next: NextFunction): void {
   try {
     const decoded = jwt.verify(token, secret) as AuthPayload;
     req.userId = decoded.userId;
-    req.tenantId = decoded.tenantId;
+    req.tenantId = decoded.tenantId ?? undefined;
     req.userRole = decoded.role;
     next();
   } catch {
@@ -174,6 +174,6 @@ export function webhookAuth(req: Request, res: Response, next: NextFunction): vo
 /**
  * Generate a JWT token for a user.
  */
-export function generateToken(userId: string, tenantId: string, role: string): string {
+export function generateToken(userId: string, tenantId: string | null, role: string): string {
   return jwt.sign({ userId, tenantId, role }, secret, { expiresIn: '24h' });
 }

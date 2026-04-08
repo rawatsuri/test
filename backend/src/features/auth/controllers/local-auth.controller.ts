@@ -11,14 +11,19 @@ type LoginBody = {
 
 function buildSessionUser(user: {
   id: string;
-  tenantId: string;
+  tenantId: string | null;
   email: string;
   role: string;
 }) {
   const isSuperAdmin = user.role === 'SUPER_ADMIN';
+  const accountNo = isSuperAdmin ? 'platform' : user.tenantId;
+
+  if (!accountNo) {
+    throw new Error(`User ${user.email} is missing a tenant assignment`);
+  }
 
   return {
-    accountNo: isSuperAdmin ? 'platform' : user.tenantId,
+    accountNo,
     email: user.email,
     role: [user.role],
     exp: Date.now() + 24 * 60 * 60 * 1000,

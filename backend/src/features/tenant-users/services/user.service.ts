@@ -11,11 +11,11 @@ export class UserService {
   ): Promise<{ success: boolean; data?: User; error?: string }> {
     try {
       // Check if user already exists in this tenant
-      const existing = await this.userRepository.findByEmail(data.email, data.tenantId);
+      const existing = await this.userRepository.findByEmail(data.email);
       if (existing) {
         return {
           success: false,
-          error: 'User with this email already exists in this tenant',
+          error: 'User with this email already exists',
         };
       }
 
