@@ -6,6 +6,27 @@ A multi-tenant SaaS platform for AI-assisted customer operations. The current re
 - `pipecat-server/`: Python Pipecat runtime for live voice conversations
 - `web/`: React dashboard that can run against mock data or the real backend
 
+## Current Product Scope
+
+The current product acceptance bar is the core voice operations loop:
+
+1. inbound or outbound call is created
+2. tenant and caller context are resolved
+3. Pipecat conversation starts
+4. transcripts and extractions are persisted
+5. call completion state is saved
+6. operators can review calls and callers in the web app
+
+The following surfaces exist in the frontend but are currently deferred:
+
+- bookings / orders
+- shared inbox
+- channels
+- automations
+- super-admin analytics
+
+Those should not be treated as shipping functionality until the voice loop above is verified end to end.
+
 ## Current Architecture
 
 ```text
@@ -28,7 +49,7 @@ The frontend now uses explicit runtime switches:
 Recommended local combinations:
 
 1. `mock auth + mock data`
-   Use this when you want the whole dashboard navigable, including UI sections whose backend APIs are not finished yet.
+   Use this when you want the whole dashboard navigable, including deferred UI sections whose backend APIs are not finished yet.
 
 2. `mock auth + api data`
    Use this when you want to exercise the real backend routes that already exist.
@@ -189,6 +210,16 @@ POST /api/internal/calls/:callId/transfer
 - Backend builds caller context and tenant-specific agent config
 - Backend creates Pipecat conversations
 - Pipecat calls back into internal routes to persist transcripts, extractions, and completion state
+
+### 6. Current Priority
+
+Before expanding into omnichannel or workflow automation, verify:
+
+1. real telephony webhook entry
+2. context injection into Pipecat
+3. transcript persistence into `Transcript`
+4. extraction persistence into `Extraction`
+5. final summary / completion persistence into `Call`
 
 ### 6. Testing And Quality
 

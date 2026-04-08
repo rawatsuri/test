@@ -56,6 +56,12 @@ Purpose: Keep the frontend runtime modes honest by separating implemented backen
 36. `DELETE /v1/tenants/:tenantId/users/:userId`
 37. `GET /v1/auth/me`
 
+## Deferred UI Modules
+
+These surfaces are intentionally not part of the current core-product acceptance bar.
+They can stay visible for design exploration, but should be treated as deferred until the
+voice calling flow is production-ready end to end.
+
 ## Mock-Only UI Modules Today
 
 These screens remain frontend-only when `VITE_DATA_MODE=mock`:
@@ -75,6 +81,20 @@ These screens remain frontend-only when `VITE_DATA_MODE=mock`:
 4. omnichannel conversation/channel/automation routes
 5. invitation workflow routes for team onboarding
 6. optional registration and invitation flow for local-auth onboarding
+
+## Current Core Product Focus
+
+The current implementation focus should be:
+
+1. telephony webhook -> call creation
+2. context building from caller history + tenant agent config
+3. Pipecat conversation creation
+4. transcript persistence
+5. extraction persistence
+6. call completion / summary persistence
+7. workspace review of calls and callers
+
+Everything outside that flow is secondary until the live voice loop is verified.
 
 ## Response Contract
 
