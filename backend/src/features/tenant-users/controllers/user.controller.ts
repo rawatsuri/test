@@ -32,8 +32,8 @@ export class UserController {
     next: NextFunction,
   ): Promise<void> => {
     try {
-      const { userId } = req.params;
-      const result = await this.userService.getUserById(userId);
+      const { tenantId, userId } = req.params;
+      const result = await this.userService.getTenantUserById(tenantId, userId);
 
       if (!result.success) {
         res.status(404).json(result);
@@ -72,8 +72,8 @@ export class UserController {
     next: NextFunction,
   ): Promise<void> => {
     try {
-      const { userId } = req.params;
-      const result = await this.userService.updateUser(userId, req.body);
+      const { tenantId, userId } = req.params;
+      const result = await this.userService.updateUser(tenantId, userId, req.body);
 
       if (!result.success) {
         res.status(result.error === 'User not found' ? 404 : 400).json(result);
@@ -92,8 +92,8 @@ export class UserController {
     next: NextFunction,
   ): Promise<void> => {
     try {
-      const { userId } = req.params;
-      const result = await this.userService.deleteUser(userId);
+      const { tenantId, userId } = req.params;
+      const result = await this.userService.deleteUser(tenantId, userId);
 
       if (!result.success) {
         res.status(result.error === 'User not found' ? 404 : 400).json(result);

@@ -1,4 +1,4 @@
-import { PrismaClient, User } from '@prisma/client';
+import { PrismaClient, User, UserRole } from '@prisma/client';
 
 import { CreateUserInput, UpdateUserInput } from '../schemas/user.schema';
 
@@ -36,8 +36,26 @@ export class UserRepository {
 
   async findByTenant(tenantId: string): Promise<User[]> {
     return this.prisma.user.findMany({
-      where: { tenantId, active: true },
+      where: {
+        tenantId,
+        active: true,
+        role: {
+          not: UserRole.SUPER_ADMIN,
+        },
+      },
       orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async findByIdInTenant(id: string, tenantId: string): Promise<User | null> {
+    return this.prisma.user.findFirst({
+      where: {
+        id,
+        tenantId,
+        role: {
+          not: UserRole.SUPER_ADMIN,
+        },
+      },
     });
   }
 

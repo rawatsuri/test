@@ -1,3 +1,5 @@
+import dotenv from 'dotenv';
+import fs from 'fs';
 import bcrypt from 'bcrypt';
 import {
   CallDirection,
@@ -15,6 +17,18 @@ import {
   TTSProvider,
   UserRole,
 } from '@prisma/client';
+
+const NODE_ENV = process.env.NODE_ENV ?? 'development';
+const candidateEnvFiles =
+  NODE_ENV === 'development'
+    ? [`.env.${NODE_ENV}`, '.env.dev', '.env']
+    : [`.env.${NODE_ENV}`, '.env'];
+
+const envFileToLoad = candidateEnvFiles.find(file => fs.existsSync(file));
+if (envFileToLoad) {
+  dotenv.config({ path: envFileToLoad });
+  console.log(`[seed-demo] Loaded ${envFileToLoad} (NODE_ENV=${NODE_ENV})`);
+}
 
 const prisma = new PrismaClient();
 const DEMO_PASSWORD = 'Pass@123';

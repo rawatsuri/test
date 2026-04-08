@@ -58,6 +58,33 @@ export class UserService {
     }
   }
 
+  async getTenantUserById(
+    tenantId: string,
+    id: string,
+  ): Promise<{ success: boolean; data?: User; error?: string }> {
+    try {
+      const user = await this.userRepository.findByIdInTenant(id, tenantId);
+
+      if (!user) {
+        return {
+          success: false,
+          error: 'User not found',
+        };
+      }
+
+      return {
+        success: true,
+        data: user,
+      };
+    } catch (error) {
+      console.error('Error fetching tenant user:', error);
+      return {
+        success: false,
+        error: 'Failed to fetch user',
+      };
+    }
+  }
+
   async getUsersByTenant(
     tenantId: string,
   ): Promise<{ success: boolean; data?: User[]; error?: string }> {
@@ -78,11 +105,12 @@ export class UserService {
   }
 
   async updateUser(
+    tenantId: string,
     id: string,
     data: UpdateUserInput,
   ): Promise<{ success: boolean; data?: User; error?: string }> {
     try {
-      const existing = await this.userRepository.findById(id);
+      const existing = await this.userRepository.findByIdInTenant(id, tenantId);
 
       if (!existing) {
         return {
@@ -106,9 +134,9 @@ export class UserService {
     }
   }
 
-  async deleteUser(id: string): Promise<{ success: boolean; error?: string }> {
+  async deleteUser(tenantId: string, id: string): Promise<{ success: boolean; error?: string }> {
     try {
-      const existing = await this.userRepository.findById(id);
+      const existing = await this.userRepository.findByIdInTenant(id, tenantId);
 
       if (!existing) {
         return {
