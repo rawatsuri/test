@@ -1,8 +1,8 @@
 import { useState, type FormEvent } from 'react'
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, redirect } from '@tanstack/react-router'
 import { toast } from 'sonner'
 import { describeFrontendRuntime } from '@/config/runtime'
-import { buildRouterAuth, getPostLoginPath } from '@/lib/auth'
+import { buildRouterAuth, getPostLoginPath, getPostLoginTarget } from '@/lib/auth'
 import { platformService } from '@/lib/platform-service'
 import { useAuthStore } from '@/stores/auth-store'
 import { Button } from '@/components/ui/button'
@@ -25,6 +25,15 @@ export const Route = createFileRoute('/login')({
   validateSearch: (search: Record<string, unknown>) => ({
     redirect: typeof search.redirect === 'string' ? search.redirect : '/',
   }),
+  beforeLoad: ({ context }) => {
+    if (!context.auth.isAuthenticated) return
+
+    const target = getPostLoginTarget(context.auth)
+    throw redirect({
+      to: target.to,
+      params: target.params,
+    })
+  },
   component: LoginPage,
 })
 
