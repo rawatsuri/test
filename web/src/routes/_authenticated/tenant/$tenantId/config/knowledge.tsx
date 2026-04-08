@@ -11,6 +11,14 @@ import {
 } from '@/hooks/tenant/use-tenant-data'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
@@ -164,59 +172,78 @@ function KnowledgeRow({
   onDelete: () => void
 }) {
   const updateKnowledge = useUpdateTenantKnowledge(tenantId, item.id)
+  const [open, setOpen] = useState(false)
   const [title, setTitle] = useState(item.title)
   const [category, setCategory] = useState(item.category ?? '')
   const [content, setContent] = useState(item.content)
 
   return (
-    <div className='space-y-3 rounded-lg border p-3'>
-      <div className='grid gap-3 sm:grid-cols-2'>
-        <div className='space-y-2'>
-          <Label>Title</Label>
-          <Input value={title} disabled={!canEditConfig} onChange={(event) => setTitle(event.target.value)} />
+    <div className='rounded-lg border p-3'>
+      <div className='flex items-start justify-between gap-4'>
+        <div className='min-w-0 space-y-1'>
+          <p className='text-sm font-medium'>{item.title}</p>
+          <p className='text-xs text-muted-foreground'>{item.category || 'General'}</p>
+          <p className='line-clamp-3 text-sm text-muted-foreground'>{item.content}</p>
         </div>
-        <div className='space-y-2'>
-          <Label>Category</Label>
-          <Input
-            value={category}
-            disabled={!canEditConfig}
-            onChange={(event) => setCategory(event.target.value)}
-          />
-        </div>
-      </div>
-      <div className='space-y-2'>
-        <Label>Content</Label>
-        <Textarea
-          rows={4}
-          value={content}
-          disabled={!canEditConfig}
-          onChange={(event) => setContent(event.target.value)}
-        />
-      </div>
-      <div className='flex items-center justify-between gap-3'>
-        <p className='text-xs text-muted-foreground'>{item.category || 'General'}</p>
         <div className='flex items-center gap-2'>
-          <Button
-            variant='outline'
-            size='sm'
-            disabled={!canEditConfig || updateKnowledge.isPending}
-            onClick={() =>
-              updateKnowledge.mutate(
-                { title, category, content },
-                {
-                  onSuccess: () => toast.success('Knowledge item updated'),
-                  onError: (error) => toast.error(getApiErrorMessage(error, 'Failed to update knowledge item')),
-                },
-              )
-            }
-          >
-            Save
-          </Button>
+          {canEditConfig ? (
+            <Button variant='outline' size='sm' onClick={() => setOpen(true)}>
+              Edit
+            </Button>
+          ) : null}
           <Button variant='outline' size='sm' disabled={!canEditConfig || deleting} onClick={onDelete}>
             Remove
           </Button>
         </div>
       </div>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Knowledge Item</DialogTitle>
+            <DialogDescription>Update the facts and policies available to the voice agent.</DialogDescription>
+          </DialogHeader>
+
+          <div className='grid gap-4 sm:grid-cols-2'>
+            <div className='space-y-2'>
+              <Label>Title</Label>
+              <Input value={title} onChange={(event) => setTitle(event.target.value)} />
+            </div>
+            <div className='space-y-2'>
+              <Label>Category</Label>
+              <Input value={category} onChange={(event) => setCategory(event.target.value)} />
+            </div>
+          </div>
+
+          <div className='space-y-2'>
+            <Label>Content</Label>
+            <Textarea rows={6} value={content} onChange={(event) => setContent(event.target.value)} />
+          </div>
+
+          <DialogFooter>
+            <Button variant='outline' onClick={() => setOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              disabled={updateKnowledge.isPending}
+              onClick={() =>
+                updateKnowledge.mutate(
+                  { title, category, content },
+                  {
+                    onSuccess: () => {
+                      toast.success('Knowledge item updated')
+                      setOpen(false)
+                    },
+                    onError: (error) => toast.error(getApiErrorMessage(error, 'Failed to update knowledge item')),
+                  },
+                )
+              }
+            >
+              Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

@@ -11,6 +11,14 @@ import {
 } from '@/hooks/tenant/use-tenant-data'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -171,6 +179,7 @@ function PhoneNumberRow({
   onDelete: () => void
 }) {
   const updateNumber = useUpdateTenantPhoneNumber(tenantId, phone.id)
+  const [open, setOpen] = useState(false)
   const [label, setLabel] = useState(phone.label ?? '')
 
   return (
@@ -183,31 +192,64 @@ function PhoneNumberRow({
           </p>
         </div>
         <div className='flex items-center gap-2'>
-          <Button
-            variant='outline'
-            size='sm'
-            disabled={!canEditConfig || updateNumber.isPending}
-            onClick={() =>
-              updateNumber.mutate(
-                { label },
-                {
-                  onSuccess: () => toast.success('Phone number updated'),
-                  onError: (error) => toast.error(getApiErrorMessage(error, 'Failed to update phone number')),
-                },
-              )
-            }
-          >
-            Save
-          </Button>
+          {canEditConfig ? (
+            <Button variant='outline' size='sm' onClick={() => setOpen(true)}>
+              Edit
+            </Button>
+          ) : null}
           <Button variant='outline' size='sm' disabled={!canEditConfig || deleting} onClick={onDelete}>
             Remove
           </Button>
         </div>
       </div>
-      <div className='space-y-2'>
-        <Label>Label</Label>
-        <Input value={label} disabled={!canEditConfig} onChange={(event) => setLabel(event.target.value)} />
-      </div>
+      <p className='text-sm text-muted-foreground'>Label: {phone.label || 'Unlabeled'}</p>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Phone Line</DialogTitle>
+            <DialogDescription>Update the internal label used to identify this number.</DialogDescription>
+          </DialogHeader>
+
+          <div className='space-y-2'>
+            <Label>Number</Label>
+            <Input value={phone.number} disabled />
+          </div>
+
+          <div className='space-y-2'>
+            <Label>Provider</Label>
+            <Input value={phone.provider} disabled />
+          </div>
+
+          <div className='space-y-2'>
+            <Label>Label</Label>
+            <Input value={label} onChange={(event) => setLabel(event.target.value)} />
+          </div>
+
+          <DialogFooter>
+            <Button variant='outline' onClick={() => setOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              disabled={updateNumber.isPending}
+              onClick={() =>
+                updateNumber.mutate(
+                  { label },
+                  {
+                    onSuccess: () => {
+                      toast.success('Phone number updated')
+                      setOpen(false)
+                    },
+                    onError: (error) => toast.error(getApiErrorMessage(error, 'Failed to update phone number')),
+                  },
+                )
+              }
+            >
+              Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
