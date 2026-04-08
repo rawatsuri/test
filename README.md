@@ -82,11 +82,28 @@ PIPECAT_BASE_URL=http://localhost:3001
 
 ```bash
 cd pipecat-server
+cp .env.example .env
 pip install -r requirements.txt
 python server.py
 ```
 
 The runtime listens on `PIPECAT_PORT` and defaults to `3001`.
+
+Minimum Pipecat runtime values for local voice testing:
+
+```bash
+BACKEND_BASE_URL=http://localhost:5001
+INTERNAL_API_SECRET=... # if backend sets it
+DEEPGRAM_API_KEY=...
+OPENAI_API_KEY=...      # or GROQ_API_KEY depending on tenant agent config
+AZURE_SPEECH_KEY=...    # if tenant TTS provider is Azure
+AZURE_SPEECH_REGION=...
+```
+
+Important:
+
+- Pipecat now posts transcript, extraction, and completion events back to the backend using `BACKEND_BASE_URL`.
+- Seeded tenant agent configs do not store encrypted provider keys by default, so the Pipecat runtime falls back to its own environment variables for STT/TTS/LLM unless you save provider keys in the tenant AI config.
 
 ### 3. Frontend
 
@@ -125,6 +142,8 @@ When `VITE_AUTH_MODE=mock`:
 - `PIPECAT_BASE_URL`: backend proxy target and backend-to-Pipecat API client base URL
 - `PIPECAT_STREAM_URL`: optional public media-stream base URL when a provider cannot use the internal base URL directly
 - `PIPECAT_OUTBOUND_CALL_URL`: optional bridge endpoint for backend-triggered outbound calls
+- `BACKEND_BASE_URL`: Pipecat runtime callback target for `/api/internal/calls/:callId/*`
+- `INTERNAL_API_SECRET`: shared secret Pipecat uses when calling backend internal routes
 
 ## Project Structure
 

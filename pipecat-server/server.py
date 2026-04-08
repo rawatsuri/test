@@ -10,6 +10,8 @@ import re
 import time
 import uuid
 from typing import Dict, Optional
+from urllib import error as urllib_error
+from urllib import request as urllib_request
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
@@ -59,6 +61,9 @@ app = FastAPI(title="Pipecat Voice Pipeline Server")
 
 # Active pipeline sessions
 sessions: Dict[str, dict] = {}
+
+BACKEND_BASE_URL = os.getenv("BACKEND_BASE_URL", "http://localhost:5001").rstrip("/")
+INTERNAL_API_SECRET = os.getenv("INTERNAL_API_SECRET")
 
 HOTEL_CITY_HINTS = [
     "delhi",
@@ -130,6 +135,105 @@ def _parse_number_token(token: str) -> Optional[int]:
     if token.isdigit():
         return int(token)
     return NUMBER_WORDS.get(token)
+
+
+def _normalize_runtime_context(context: Optional[dict]) -> dict:
+    context = dict(context or {})
+    if "callerContext" in context and "caller_context" not in context:
+        context["caller_context"] = context["callerContext"]
+    if "memoryPrompt" in context and "memory_prompt" not in context:
+        context["memory_prompt"] = context["memoryPrompt"]
+    if "fallbackMessage" in context and "fallback_message" not in context:
+        context["fallback_message"] = context["fallbackMessage"]
+    if "maxCallDuration" in context and "max_call_duration" not in context:
+        context["max_call_duration"] = context["maxCallDuration"]
+    return context
+
+
+def _append_memory_prompt(system_prompt: str, runtime_context: dict) -> str:
+    memory_prompt = runtime_context.get("memory_prompt")
+    if not memory_prompt:
+        return system_prompt
+
+    memory_prompt = str(memory_prompt).strip()
+    if not memory_prompt:
+        return system_prompt
+
+    return f"{system_prompt.strip()}\n\n## CALLER CONTEXT\n{memory_prompt}"
+
+
+async def _post_internal_event(call_id: Optional[str], action: str, payload: dict) -> None:
+    if not call_id:
+        return
+
+    url = f"{BACKEND_BASE_URL}/api/internal/calls/{call_id}/{action}"
+    headers = {
+        "Content-Type": "application/json",
+    }
+    if INTERNAL_API_SECRET:
+        headers["X-Internal-Api-Secret"] = INTERNAL_API_SECRET
+
+    def _send() -> None:
+        data = json.dumps(payload).encode("utf-8")
+        req = urllib_request.Request(url, data=data, headers=headers, method="POST")
+        with urllib_request.urlopen(req, timeout=5) as response:
+            response.read()
+
+    try:
+        await asyncio.to_thread(_send)
+    except urllib_error.HTTPError as error:
+        logger.warning(f"Failed internal event {action} for {call_id}: HTTP {error.code}")
+    except Exception as error:
+        logger.warning(f"Failed internal event {action} for {call_id}: {error}")
+
+
+def _truncate_text(text: str, limit: int = 180) -> str:
+    text = _cleanup_text(text)
+    if len(text) <= limit:
+        return text
+    return text[: limit - 3].rstrip() + "..."
+
+
+def _build_call_summary(state: dict, agent_type: str) -> Optional[str]:
+    entries = state.get("transcript_entries", [])
+    if not entries:
+        return None
+
+    caller_entries = [entry["content"] for entry in entries if entry["role"] == "CALLER"]
+    agent_entries = [entry["content"] for entry in entries if entry["role"] == "AGENT"]
+
+    last_caller = _truncate_text(caller_entries[-1]) if caller_entries else ""
+    last_agent = _truncate_text(agent_entries[-1]) if agent_entries else ""
+
+    if last_caller and last_agent:
+        return f"Caller discussed {last_caller} Assistant replied {last_agent}"
+    if last_caller:
+        return f"Caller discussed {last_caller}"
+    if last_agent:
+        prefix = "Assistant handled the call"
+        if agent_type in {"doctor", "hotel", "booking"}:
+            prefix = f"Assistant handled the {agent_type} request"
+        return f"{prefix}. Final response: {last_agent}"
+    return None
+
+
+def _build_generic_extraction(state: dict, agent_type: str) -> Optional[dict]:
+    last_user_text = _cleanup_text(state.get("last_user_text", ""))
+    last_assistant_text = _cleanup_text(state.get("last_assistant_text", ""))
+
+    if not last_user_text and not last_assistant_text:
+        return None
+
+    return {
+        "type": "conversation_summary",
+        "data": {
+            "agent_type": agent_type,
+            "caller_request": last_user_text or None,
+            "assistant_response": last_assistant_text or None,
+            "turn_count": state.get("turn_id", 0),
+        },
+        "confidence": 0.5,
+    }
 
 
 def _extract_booking_fields(text: str, booking_state: dict) -> dict:
@@ -375,14 +479,14 @@ class AssistantResponseNormalizer(FrameProcessor):
             return "मैं होटल बुकिंग में मदद कर सकती हूँ, बताइए आपको क्या चाहिए?"
         if self._agent_type == "doctor":
             return "मैं डॉक्टर अपॉइंटमेंट बुकिंग में मदद कर सकती हूँ, बताइए आपको क्या चाहिए?"
-        return "मैं बुकिंग में मदद कर सकती हूँ, बताइए आपको क्या चाहिए?"
+        return "मैं आपकी मदद कर सकती हूँ, बताइए आपको क्या चाहिए?"
 
     def _build_scope_boundary_reply(self) -> str:
         if self._agent_type == "hotel":
             return "अभी मैं सिर्फ होटल बुकिंग में मदद कर सकती हूँ, अगर होटल चाहिए तो शहर बताइए।"
         if self._agent_type == "doctor":
             return "अभी मैं सिर्फ डॉक्टर अपॉइंटमेंट बुकिंग में मदद कर सकती हूँ, अगर appointment चाहिए तो बताइए।"
-        return "अभी मैं booking help तक सीमित हूँ, बताइए आपको किस booking में मदद चाहिए।"
+        return "अभी मैं इसी कॉल से जुड़ी मदद कर सकती हूँ, बताइए आपको क्या चाहिए।"
 
     def _looks_like_acknowledgement_only(self, text: str) -> bool:
         normalized = re.sub(r"[^a-zA-Z\u0900-\u097F\s]", " ", text.lower())
@@ -664,6 +768,60 @@ class AssistantResponseNormalizer(FrameProcessor):
         await self.push_frame(frame, direction)
 
 
+class BackendPersistenceProcessor(FrameProcessor):
+    def __init__(self, session_id: str, call_id: Optional[str], state: dict):
+        super().__init__()
+        self._session_id = session_id
+        self._call_id = call_id
+        self._state = state
+        self._last_saved_agent_turn = None
+        self._last_saved_caller_signature = None
+
+    async def process_frame(self, frame, direction: FrameDirection):
+        await super().process_frame(frame, direction)
+
+        if isinstance(frame, TranscriptionFrame) and frame.finalized:
+            content = _cleanup_text(getattr(frame, "text", "") or "")
+            if content:
+                signature = (self._state.get("turn_id"), content)
+                if signature != self._last_saved_caller_signature:
+                    self._last_saved_caller_signature = signature
+                    self._state.setdefault("transcript_entries", []).append({
+                        "role": "CALLER",
+                        "content": content,
+                    })
+                    await _post_internal_event(
+                        self._call_id,
+                        "transcript",
+                        {
+                            "role": "CALLER",
+                            "content": content,
+                            "confidence": getattr(frame, "confidence", None),
+                        },
+                    )
+
+        elif isinstance(frame, LLMTextFrame):
+            content = _cleanup_text(getattr(frame, "text", "") or "")
+            current_turn = self._state.get("turn_id")
+            if content and current_turn != self._last_saved_agent_turn:
+                self._last_saved_agent_turn = current_turn
+                self._state["last_assistant_text"] = content
+                self._state.setdefault("transcript_entries", []).append({
+                    "role": "AGENT",
+                    "content": content,
+                })
+                await _post_internal_event(
+                    self._call_id,
+                    "transcript",
+                    {
+                        "role": "AGENT",
+                        "content": content,
+                    },
+                )
+
+        await self.push_frame(frame, direction)
+
+
 # ---------------------------------------------------------------------------
 # Telephony Serializers — auto-capture stream SID from the 'start' event
 # ---------------------------------------------------------------------------
@@ -779,6 +937,8 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
 
     session = sessions.get(session_id)
     config = session.get("config", {}) if session else {}
+    runtime_context = _normalize_runtime_context(config.get("context", {}) or {})
+    call_id = config.get("call_id")
 
     raw_language    = config.get("language", "hi-IN")
     stt_name        = config.get("stt_provider", "deepgram").lower()
@@ -790,7 +950,8 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
     is_hindi        = "hi" in raw_language
     deepgram_lang   = "hi" if is_hindi else "en-IN"
     cartesia_lang   = Language.HI if is_hindi else Language.EN
-    agent_type = (config.get("context", {}) or {}).get("agent_type", "booking")
+    agent_type = runtime_context.get("agent_type", "general")
+    report_completion = None
 
     # --- Build system prompt using prompts module ---
     from prompts import build_prompt, build_greeting
@@ -798,12 +959,12 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
     raw_prompt = config.get("system_prompt")
     provided_prompt = raw_prompt.strip() if isinstance(raw_prompt, str) else ""
     if provided_prompt:
-        system_prompt = provided_prompt
+        system_prompt = _append_memory_prompt(provided_prompt, runtime_context)
     else:
-        system_prompt = build_prompt(agent_type, config.get("context"))
+        system_prompt = build_prompt(agent_type, runtime_context)
 
     # --- Build greeting ---
-    default_greeting = build_greeting(agent_type, raw_language, config.get("context"))
+    default_greeting = build_greeting(agent_type, raw_language, runtime_context)
 
     try:
         # ----------------------------------------------------------------
@@ -833,7 +994,7 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
                 audio_in_enabled=True,
                 audio_out_enabled=True,
                 serializer=serializer,
-                session_timeout=300,
+                session_timeout=int(runtime_context.get("max_call_duration") or 300),
             ),
         )
 
@@ -993,6 +1154,9 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
             "llm_logged_turn": None,
             "tts_logged_turn": None,
             "last_user_text": "",
+            "last_assistant_text": "",
+            "transcript_entries": [],
+            "completion_reported": False,
             "booking_state": {
                 "intent": None,
                 "city": None,
@@ -1012,6 +1176,7 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
         tts_latency_tracker = StageLatencyTracker(session_id, "tts", latency_state)
         context_sanitizer = ContextSanitizer(max_history_messages=8)
         assistant_response_normalizer = AssistantResponseNormalizer(latency_state, agent_type)
+        backend_persistence = BackendPersistenceProcessor(session_id, call_id, latency_state)
 
         # ----------------------------------------------------------------
         # Pipeline (no SentenceAggregator — TTS handles text aggregation)
@@ -1025,11 +1190,28 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
             llm,
             llm_latency_tracker,
             assistant_response_normalizer,
+            backend_persistence,
             tts,
             tts_latency_tracker,
             transport.output(),
             assistant_aggregator,
         ])
+
+        async def report_completion() -> None:
+            if latency_state.get("completion_reported"):
+                return
+            latency_state["completion_reported"] = True
+
+            extraction_payload = _build_generic_extraction(latency_state, agent_type)
+            if extraction_payload:
+                await _post_internal_event(call_id, "extraction", extraction_payload)
+
+            summary = _build_call_summary(latency_state, agent_type)
+            completion_payload = {}
+            if summary:
+                completion_payload["summary"] = summary
+
+            await _post_internal_event(call_id, "complete", completion_payload)
 
         task = PipelineTask(
             pipeline,
@@ -1054,11 +1236,13 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
         @transport.event_handler("on_client_disconnected")
         async def on_client_disconnected(transport, client):
             logger.info(f"📴 Audio stream disconnected: {session_id}")
+            await report_completion()
             await task.cancel()
 
         @transport.event_handler("on_session_timeout")
         async def on_session_timeout(transport, client):
             logger.info(f"⏰ Session timeout: {session_id}")
+            await report_completion()
             await task.cancel()
 
         @user_aggregator.event_handler("on_user_turn_started")
@@ -1097,6 +1281,11 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
         import traceback
         traceback.print_exc()
     finally:
+        try:
+            if report_completion is not None:
+                await report_completion()
+        except Exception:
+            pass
         sessions.pop(session_id, None)
         logger.info(f"🧹 Cleaned up: {session_id}")
 

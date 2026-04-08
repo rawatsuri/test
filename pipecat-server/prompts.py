@@ -1,8 +1,8 @@
 """
-Prompt Builders for AI Voice Agent — Doctor Appointment & Hotel Booking
+Prompt builders for the Pipecat runtime.
 
-Structured, domain-specific prompts for natural Hinglish/English voice conversations.
-Each builder returns a complete system prompt string ready for LLM injection.
+The current production path usually provides a tenant-specific `system_prompt`
+from the backend. These builders act as fallbacks for explicit demo agent types.
 """
 
 
@@ -355,7 +355,16 @@ def build_greeting(agent_type: str = "booking", language: str = "hi-IN", context
                 return f"Hello {caller_name}, this is Ria speaking. How may I help you today?"
             return "Hello, this is Ria speaking. How may I help you today?"
 
-    else:  # combined / booking
+    elif agent_type == "booking":
+        if is_hindi:
+            if is_returning and caller_name:
+                return f"नमस्ते {caller_name} जी, मैं रिया बोल रही हूँ। बताइए, आज मैं आपकी किस तरह मदद कर सकती हूँ?"
+            return "नमस्ते जी, मैं रिया बोल रही हूँ। बताइए, आज मैं आपकी किस तरह मदद कर सकती हूँ?"
+        else:
+            if is_returning and caller_name:
+                return f"Hello {caller_name}, this is Ria speaking. How may I help you today?"
+            return "Hello, this is Ria speaking. How may I help you today?"
+    else:
         if is_hindi:
             if is_returning and caller_name:
                 return f"नमस्ते {caller_name} जी, मैं रिया बोल रही हूँ। बताइए, आज मैं आपकी किस तरह मदद कर सकती हूँ?"
@@ -411,7 +420,7 @@ def format_caller_context(caller_context: dict) -> str:
 # Main entry point — used by server.py
 # ---------------------------------------------------------------------------
 
-def build_prompt(agent_type: str = "booking", context: dict = None) -> str:
+def build_prompt(agent_type: str = "general", context: dict = None) -> str:
     """
     Build the appropriate system prompt based on agent type.
 
@@ -433,5 +442,14 @@ def build_prompt(agent_type: str = "booking", context: dict = None) -> str:
         return build_doctor_booking_prompt(context)
     elif agent_type == "hotel":
         return build_hotel_booking_prompt(context)
-    else:
+    elif agent_type == "booking":
         return build_combined_booking_prompt(context)
+    else:
+        return f"""You are a warm, concise, professional AI voice assistant helping callers on behalf of the business.
+
+Use the tenant instructions and caller context below to guide the conversation. Stay brief, natural, and helpful.
+{f'''
+
+## CALLER CONTEXT
+{context.get("caller_context")}''' if context.get("caller_context") else ''}
+""" + COMMON_RULES
