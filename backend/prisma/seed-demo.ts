@@ -146,8 +146,8 @@ async function seedSunlight(passwordHash: string) {
       language: 'en-IN',
       telephonyProvider: TelephonyProvider.TWILIO,
       sttProvider: STTProvider.DEEPGRAM,
-      ttsProvider: TTSProvider.AZURE,
-      llmProvider: LLMProvider.OPENAI,
+      ttsProvider: TTSProvider.CARTESIA,
+      llmProvider: LLMProvider.GROQ,
       llmModel: 'gpt-4o-mini',
       greeting:
         'Thank you for calling Sunlight Pediatrics. I can help with appointments, clinic timings, or connect you to the right desk.',
@@ -428,8 +428,8 @@ async function seedMeadow(passwordHash: string) {
       language: 'en-IN',
       telephonyProvider: TelephonyProvider.TWILIO,
       sttProvider: STTProvider.DEEPGRAM,
-      ttsProvider: TTSProvider.AZURE,
-      llmProvider: LLMProvider.OPENAI,
+      ttsProvider: TTSProvider.CARTESIA,
+      llmProvider: LLMProvider.GROQ,
       llmModel: 'gpt-4o-mini',
       greeting:
         'Welcome to Meadow Dental Studio. I can help you with appointments, treatment pricing, and clinic timings.',
@@ -638,8 +638,8 @@ async function seedLimeleaf(passwordHash: string) {
       language: 'en-IN',
       telephonyProvider: TelephonyProvider.TWILIO,
       sttProvider: STTProvider.DEEPGRAM,
-      ttsProvider: TTSProvider.AZURE,
-      llmProvider: LLMProvider.OPENAI,
+      ttsProvider: TTSProvider.CARTESIA,
+      llmProvider: LLMProvider.GROQ,
       llmModel: 'gpt-4o-mini',
       greeting:
         'Thank you for calling Limeleaf Home Services. I can help schedule a technician visit.',

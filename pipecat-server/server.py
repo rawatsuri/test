@@ -775,7 +775,6 @@ class BackendPersistenceProcessor(FrameProcessor):
         self._call_id = call_id
         self._state = state
         self._last_saved_agent_turn = None
-        self._last_saved_caller_signature = None
 
     async def process_frame(self, frame, direction: FrameDirection):
         await super().process_frame(frame, direction)
@@ -784,8 +783,8 @@ class BackendPersistenceProcessor(FrameProcessor):
             content = _cleanup_text(getattr(frame, "text", "") or "")
             if content:
                 signature = (self._state.get("turn_id"), content)
-                if signature != self._last_saved_caller_signature:
-                    self._last_saved_caller_signature = signature
+                if signature != self._state.get("last_saved_caller_signature"):
+                    self._state["last_saved_caller_signature"] = signature
                     self._state.setdefault("transcript_entries", []).append({
                         "role": "CALLER",
                         "content": content,
@@ -1156,6 +1155,7 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
             "last_user_text": "",
             "last_assistant_text": "",
             "transcript_entries": [],
+            "last_saved_caller_signature": None,
             "completion_reported": False,
             "booking_state": {
                 "intent": None,
@@ -1261,7 +1261,24 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
         @user_aggregator.event_handler("on_user_turn_stopped")
         async def on_user_turn_stopped(aggregator, strategy, message):
             latency_state["turn_stopped_at"] = time.monotonic()
-            latency_state["last_user_text"] = (message.content or "").strip()
+            user_text = _cleanup_text(getattr(message, "content", "") or "")
+            latency_state["last_user_text"] = user_text
+            if user_text:
+                signature = (latency_state.get("turn_id"), user_text)
+                if signature != latency_state.get("last_saved_caller_signature"):
+                    latency_state["last_saved_caller_signature"] = signature
+                    latency_state.setdefault("transcript_entries", []).append({
+                        "role": "CALLER",
+                        "content": user_text,
+                    })
+                    await _post_internal_event(
+                        call_id,
+                        "transcript",
+                        {
+                            "role": "CALLER",
+                            "content": user_text,
+                        },
+                    )
             if agent_type == "hotel":
                 _update_booking_state(latency_state, latency_state["last_user_text"])
             started_at = latency_state.get("turn_started_at")

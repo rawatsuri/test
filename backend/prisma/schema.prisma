@@ -250,8 +250,8 @@ model AgentConfig {
   // Provider Selection (switchable per tenant via super admin)
   telephonyProvider TelephonyProvider @default(EXOTEL)
   sttProvider       STTProvider       @default(DEEPGRAM)
-  ttsProvider       TTSProvider       @default(AZURE)
-  llmProvider       LLMProvider       @default(OPENAI)
+  ttsProvider       TTSProvider       @default(CARTESIA)
+  llmProvider       LLMProvider       @default(GROQ)
   llmModel          String            @default("gpt-4o-mini")
 
   // Provider API Keys (tenant-specific overrides, optional)

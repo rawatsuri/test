@@ -289,9 +289,9 @@ export class CallService {
           from_phone: phoneNumber.number,
           system_prompt: agentConfig.systemPrompt || 'You are a helpful assistant.',
           greeting: agentConfig.greeting || 'Hello!',
-          llm_provider: agentConfig.llmProvider || 'OPENAI',
-          llm_model: agentConfig.llmModel || 'gpt-4o-mini',
-          tts_provider: agentConfig.ttsProvider || 'AZURE',
+          llm_provider: agentConfig.llmProvider || 'GROQ',
+          llm_model: agentConfig.llmModel || 'llama-3.3-70b-versatile',
+          tts_provider: agentConfig.ttsProvider || 'CARTESIA',
           stt_provider: agentConfig.sttProvider || 'DEEPGRAM',
         });
 
