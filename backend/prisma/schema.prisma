@@ -252,7 +252,7 @@ model AgentConfig {
   sttProvider       STTProvider       @default(DEEPGRAM)
   ttsProvider       TTSProvider       @default(CARTESIA)
   llmProvider       LLMProvider       @default(GROQ)
-  llmModel          String            @default("gpt-4o-mini")
+  llmModel          String            @default("llama-3.1-8b-instant")
 
   // Provider API Keys (tenant-specific overrides, optional)
   sttApiKey String?

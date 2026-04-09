@@ -148,7 +148,7 @@ async function seedSunlight(passwordHash: string) {
       sttProvider: STTProvider.DEEPGRAM,
       ttsProvider: TTSProvider.CARTESIA,
       llmProvider: LLMProvider.GROQ,
-      llmModel: 'gpt-4o-mini',
+      llmModel: 'llama-3.1-8b-instant',
       greeting:
         'Thank you for calling Sunlight Pediatrics. I can help with appointments, clinic timings, or connect you to the right desk.',
       fallbackMessage:
@@ -430,7 +430,7 @@ async function seedMeadow(passwordHash: string) {
       sttProvider: STTProvider.DEEPGRAM,
       ttsProvider: TTSProvider.CARTESIA,
       llmProvider: LLMProvider.GROQ,
-      llmModel: 'gpt-4o-mini',
+      llmModel: 'llama-3.1-8b-instant',
       greeting:
         'Welcome to Meadow Dental Studio. I can help you with appointments, treatment pricing, and clinic timings.',
       fallbackMessage: 'I can connect you to our front desk if needed.',
@@ -640,7 +640,7 @@ async function seedLimeleaf(passwordHash: string) {
       sttProvider: STTProvider.DEEPGRAM,
       ttsProvider: TTSProvider.CARTESIA,
       llmProvider: LLMProvider.GROQ,
-      llmModel: 'gpt-4o-mini',
+      llmModel: 'llama-3.1-8b-instant',
       greeting:
         'Thank you for calling Limeleaf Home Services. I can help schedule a technician visit.',
       fallbackMessage: 'I can arrange a callback from our service coordinator.',

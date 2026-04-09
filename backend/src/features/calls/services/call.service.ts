@@ -290,7 +290,7 @@ export class CallService {
           system_prompt: agentConfig.systemPrompt || 'You are a helpful assistant.',
           greeting: agentConfig.greeting || 'Hello!',
           llm_provider: agentConfig.llmProvider || 'GROQ',
-          llm_model: agentConfig.llmModel || 'llama-3.3-70b-versatile',
+          llm_model: agentConfig.llmModel || 'llama-3.1-8b-instant',
           tts_provider: agentConfig.ttsProvider || 'CARTESIA',
           stt_provider: agentConfig.sttProvider || 'DEEPGRAM',
         });

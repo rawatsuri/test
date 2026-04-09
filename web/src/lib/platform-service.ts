@@ -24,6 +24,7 @@ import {
   type OmnichannelConversation,
   type PhoneNumber,
   type Tenant,
+  type TriggerOutboundCallRequest,
   type UpdateAgentConfigRequest,
   type UpdateKnowledgeRequest,
   type UpdatePhoneNumberRequest,
@@ -184,8 +185,9 @@ function createSeedDb(): MockDb {
       voiceId: null,
       language: 'en-IN',
       sttProvider: 'DEEPGRAM',
-      ttsProvider: 'ELEVEN_LABS',
-      llmProvider: 'OPENAI',
+      ttsProvider: 'CARTESIA',
+      llmProvider: 'GROQ',
+      llmModel: 'llama-3.1-8b-instant',
       telephonyProvider: 'EXOTEL',
       providerApiKeys: null,
       maxCallDuration: 300,
@@ -647,6 +649,54 @@ export const platformService = {
   async getTenantCall(tenantId: string, callId: string) {
     if (isMockDataMode) return getMockCall(tenantId, callId)
     const response = await api.get<ApiEnvelope<Call>>(`/v1/tenants/${tenantId}/calls/${callId}`)
+    return response.data
+  },
+  async triggerOutboundCall(tenantId: string, payload: TriggerOutboundCallRequest) {
+    if (isMockDataMode) {
+      return withDb((db) => {
+        const phoneNumber = db.phoneNumbers.find((item) => item.tenantId === tenantId && item.id === payload.phoneNumberId)
+        if (!phoneNumber) throw new Error('Phone number not found')
+        const caller =
+          db.callers.find((item) => item.tenantId === tenantId && item.phoneNumber === payload.toNumber) ??
+          (() => {
+            const row: Caller = {
+              id: id('caller'),
+              tenantId,
+              phoneNumber: payload.toNumber,
+              name: null,
+              email: null,
+              preferences: null,
+              metadata: null,
+              firstCallAt: nowIso(),
+              lastCallAt: nowIso(),
+              totalCalls: 1,
+              isSaved: false,
+              expiresAt: null,
+            }
+            db.callers.unshift(row)
+            return row
+          })()
+        const call: Call = {
+          id: id('call'),
+          externalId: id('ext'),
+          tenantId,
+          phoneNumberId: payload.phoneNumberId,
+          callerId: caller.id,
+          direction: CallDirection.OUTBOUND,
+          status: CallStatus.RINGING,
+          startedAt: nowIso(),
+          answeredAt: null,
+          endedAt: null,
+          durationSecs: null,
+          summary: null,
+          sentiment: null,
+          provider: phoneNumber.provider,
+        }
+        db.calls.unshift(call)
+        return envelope(call)
+      })
+    }
+    const response = await api.post<ApiEnvelope<Call>>(`/v1/tenants/${tenantId}/calls/outbound`, payload)
     return response.data
   },
   async getTenantCallers(tenantId: string, filters?: Record<string, string>) {

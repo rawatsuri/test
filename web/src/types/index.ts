@@ -127,12 +127,14 @@ export interface Call {
   callerId: string
   direction: CallDirection
   status: CallStatus
+  provider?: Provider
   startedAt: string
   answeredAt: string | null
   endedAt: string | null
   durationSecs: number | null
   summary: string | null
   sentiment: string | null
+  pipecatSessionId?: string | null
   caller?: Caller
   phoneNumber?: PhoneNumber
   transcripts?: Transcript[]
@@ -194,6 +196,11 @@ export interface UpdateCallerRequest {
   metadata?: Record<string, unknown>
 }
 
+export interface TriggerOutboundCallRequest {
+  phoneNumberId: string
+  toNumber: string
+}
+
 // ============================================
 // Phone Number Types
 // ============================================
@@ -232,6 +239,7 @@ export interface AgentConfig {
   sttProvider: string
   ttsProvider: string
   llmProvider: string
+  llmModel?: string | null
   telephonyProvider: string
   providerApiKeys: string | null
   maxCallDuration: number
@@ -252,6 +260,7 @@ export interface UpdateAgentConfigRequest {
   sttProvider?: string
   ttsProvider?: string
   llmProvider?: string
+  llmModel?: string
   telephonyProvider?: string
   providerApiKeys?: string
   maxCallDuration?: number

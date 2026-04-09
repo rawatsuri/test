@@ -4,6 +4,7 @@ import type {
   CreateKnowledgeRequest,
   CreatePhoneNumberRequest,
   CreateUserRequest,
+  TriggerOutboundCallRequest,
   UpdateKnowledgeRequest,
   UpdatePhoneNumberRequest,
   UpdateAgentConfigRequest,
@@ -27,6 +28,19 @@ export function useTenantCall(tenantId: string, callId: string) {
       return unwrap(await platformService.getTenantCall(tenantId, callId))
     },
     enabled: !!tenantId && !!callId,
+  })
+}
+
+export function useTriggerOutboundTenantCall(tenantId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (payload: TriggerOutboundCallRequest) => {
+      return unwrap(await platformService.triggerOutboundCall(tenantId, payload))
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tenant-calls', tenantId] })
+      queryClient.invalidateQueries({ queryKey: ['tenant-callers', tenantId] })
+    },
   })
 }
 

@@ -1,9 +1,25 @@
-import type { ReactNode } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { Link, createFileRoute } from '@tanstack/react-router'
-import { ArrowLeft, Mail, Phone, Star } from 'lucide-react'
-import { useTenantCaller } from '@/hooks/tenant/use-tenant-data'
+import { ArrowLeft, Mail, Phone, PhoneCall, Star } from 'lucide-react'
+import { toast } from 'sonner'
+import {
+  useTenantCaller,
+  useTenantPhoneNumbers,
+  useTriggerOutboundTenantCall,
+} from '@/hooks/tenant/use-tenant-data'
+import { useWorkspaceRole } from '@/hooks/use-workspace-role'
+import { getApiErrorMessage } from '@/lib/api-error-message'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import type { Call } from '@/types'
 
 export const Route = createFileRoute('/_authenticated/tenant/$tenantId/callers/$callerId')({
@@ -12,7 +28,16 @@ export const Route = createFileRoute('/_authenticated/tenant/$tenantId/callers/$
 
 function CallerDetailPage() {
   const { tenantId, callerId } = Route.useParams()
+  const { canManageCallers } = useWorkspaceRole()
   const { data: caller, isLoading, isError } = useTenantCaller(tenantId, callerId)
+  const { data: phoneNumbers = [] } = useTenantPhoneNumbers(tenantId)
+  const triggerOutboundCall = useTriggerOutboundTenantCall(tenantId)
+  const [outboundOpen, setOutboundOpen] = useState(false)
+  const activePhoneNumbers = useMemo(
+    () => phoneNumbers.filter((item) => item.isActive),
+    [phoneNumbers]
+  )
+  const [selectedPhoneNumberId, setSelectedPhoneNumberId] = useState<string>('')
 
   if (isLoading) {
     return <p className='text-sm text-muted-foreground'>Loading caller...</p>
@@ -23,6 +48,38 @@ function CallerDetailPage() {
   }
 
   const callHistory = caller.calls ?? []
+
+  const openOutboundDialog = () => {
+    if (!activePhoneNumbers.length) {
+      toast.error('No active phone lines are available for outbound calls')
+      return
+    }
+    setSelectedPhoneNumberId((current) => current || activePhoneNumbers[0]!.id)
+    setOutboundOpen(true)
+  }
+
+  const submitOutboundCall = async () => {
+    if (!selectedPhoneNumberId) {
+      toast.error('Select a phone line to place the callback')
+      return
+    }
+
+    triggerOutboundCall.mutate(
+      {
+        phoneNumberId: selectedPhoneNumberId,
+        toNumber: caller.phoneNumber,
+      },
+      {
+        onSuccess: () => {
+          toast.success('Outbound call started')
+          setOutboundOpen(false)
+        },
+        onError: (error) => {
+          toast.error(getApiErrorMessage(error, 'Failed to start outbound call'))
+        },
+      }
+    )
+  }
 
   return (
     <div className='space-y-6'>
@@ -48,6 +105,12 @@ function CallerDetailPage() {
                   Back to Callers
                 </Link>
               </Button>
+              {canManageCallers ? (
+                <Button onClick={openOutboundDialog}>
+                  <PhoneCall className='mr-2 size-4' />
+                  Call This Caller
+                </Button>
+              ) : null}
             </div>
           </CardHeader>
         </Card>
@@ -123,6 +186,51 @@ function CallerDetailPage() {
           </CardContent>
         </Card>
       </section>
+
+      <Dialog open={outboundOpen} onOpenChange={setOutboundOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Place an outbound call</DialogTitle>
+            <DialogDescription>
+              Call {caller.name || caller.phoneNumber} from one of this workspace&apos;s active phone lines.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className='space-y-4'>
+            <div className='rounded-xl border border-border/70 bg-muted/20 px-4 py-3 text-sm'>
+              <p className='font-medium'>Caller</p>
+              <p className='text-muted-foreground'>{caller.phoneNumber}</p>
+            </div>
+
+            <div className='space-y-2'>
+              <label className='text-sm font-medium'>Outgoing line</label>
+              <Select value={selectedPhoneNumberId} onValueChange={setSelectedPhoneNumberId}>
+                <SelectTrigger>
+                  <SelectValue placeholder='Select a phone line' />
+                </SelectTrigger>
+                <SelectContent>
+                  {activePhoneNumbers.map((phoneNumber) => (
+                    <SelectItem key={phoneNumber.id} value={phoneNumber.id}>
+                      {[phoneNumber.label || 'Unlabelled line', phoneNumber.number, phoneNumber.provider]
+                        .filter(Boolean)
+                        .join(' · ')}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant='outline' onClick={() => setOutboundOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={submitOutboundCall} disabled={triggerOutboundCall.isPending || !selectedPhoneNumberId}>
+              {triggerOutboundCall.isPending ? 'Calling…' : 'Start Call'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
