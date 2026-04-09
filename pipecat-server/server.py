@@ -33,6 +33,7 @@ from pipecat.frames.frames import (
     TTSSpeakFrame,
     TTSStartedFrame,
     TTSAudioRawFrame,
+    TTSStoppedFrame,
     TextFrame,
     TranscriptionFrame,
 )
@@ -234,6 +235,67 @@ def _build_generic_extraction(state: dict, agent_type: str) -> Optional[dict]:
         },
         "confidence": 0.5,
     }
+
+
+def _caller_wants_to_end(text: str) -> bool:
+    lowered = _cleanup_text(text).lower()
+    if not lowered:
+        return False
+    return any(
+        phrase in lowered
+        for phrase in [
+            "bye",
+            "goodbye",
+            "end the call",
+            "finish the call",
+            "that's all",
+            "thats all",
+            "no, that's all",
+            "no thats all",
+            "no thank you",
+            "thank you for now",
+            "धन्यवाद",
+            "नमस्कार",
+            "कॉल खत्म",
+            "कॉल समाप्त",
+            "बस इतना",
+            "अब ठीक है",
+            "अभी के लिए धन्यवाद",
+        ]
+    )
+
+
+def _assistant_is_final_handoff(text: str) -> bool:
+    lowered = _cleanup_text(text).lower()
+    if not lowered:
+        return False
+
+    handoff_phrases = [
+        "reach out",
+        "contact you",
+        "call you back",
+        "callback",
+        "follow up with you",
+        "team will",
+        "front desk will",
+        "service coordinator will",
+        "आपसे संपर्क",
+        "वापस कॉल",
+        "टीम आपसे",
+    ]
+    closing_phrases = [
+        "thank",
+        "thanks",
+        "bye",
+        "goodbye",
+        "take care",
+        "धन्यवाद",
+        "नमस्कार",
+        "अलविदा",
+    ]
+    return any(phrase in lowered for phrase in handoff_phrases) and any(
+        phrase in lowered for phrase in closing_phrases
+    )
 
 
 def _extract_booking_fields(text: str, booking_state: dict) -> dict:
@@ -607,6 +669,9 @@ class AssistantResponseNormalizer(FrameProcessor):
         booking_state["last_requested_slot"] = None
         return ""
 
+    def _build_goodbye_reply(self) -> str:
+        return "ठीक है, धन्यवाद. अगर ज़रूरत हुई तो हमारी टीम आपसे संपर्क करेगी. नमस्कार।"
+
     def _normalize_response(self, text: str) -> str:
         text = self._cleanup(text)
         if not text:
@@ -617,6 +682,10 @@ class AssistantResponseNormalizer(FrameProcessor):
         booking_state = self._get_booking_state()
         booking_active = self._agent_type == "hotel" and booking_state.get("intent") == "booking"
         short_reply_fills_slot = booking_active and self._short_reply_fills_slot(user_text, booking_state)
+
+        if _caller_wants_to_end(user_text):
+            self._state["pending_end_after_tts"] = True
+            return self._build_goodbye_reply()
 
         if self._looks_like_acknowledgement_only(user_text):
             return ""
@@ -693,13 +762,21 @@ class AssistantResponseNormalizer(FrameProcessor):
         if apology and questions:
             best_question = questions[-1]
             if apology != best_question:
-                return self._cleanup(f"{apology} {best_question}")
-            return self._cleanup(best_question)
+                normalized = self._cleanup(f"{apology} {best_question}")
+                if _assistant_is_final_handoff(normalized):
+                    self._state["pending_end_after_tts"] = True
+                return normalized
+            normalized = self._cleanup(best_question)
+            if _assistant_is_final_handoff(normalized):
+                self._state["pending_end_after_tts"] = True
+            return normalized
 
         if len(sentences) == 1:
             normalized = self._cleanup(sentences[0])
             if booking_active and self._is_generic_fallback_reply(normalized):
                 return self._next_booking_question(booking_state)
+            if _assistant_is_final_handoff(normalized):
+                self._state["pending_end_after_tts"] = True
             return normalized
 
         if len(sentences) == 2:
@@ -709,29 +786,40 @@ class AssistantResponseNormalizer(FrameProcessor):
 
             # Keep a natural acknowledge + question reply intact.
             if not first_has_question and second_has_question:
-                return self._cleanup(f"{first} {second}")
+                normalized = self._cleanup(f"{first} {second}")
+                if _assistant_is_final_handoff(normalized):
+                    self._state["pending_end_after_tts"] = True
+                return normalized
 
             # If both are questions, keep only the more actionable closing question.
             if first_has_question and second_has_question:
                 normalized = self._cleanup(second)
                 if booking_active and self._is_generic_fallback_reply(normalized):
                     return self._next_booking_question(booking_state)
+                if _assistant_is_final_handoff(normalized):
+                    self._state["pending_end_after_tts"] = True
                 return normalized
 
             normalized = self._cleanup(f"{first} {second}")
             if booking_active and self._is_generic_fallback_reply(normalized):
                 return self._next_booking_question(booking_state)
+            if _assistant_is_final_handoff(normalized):
+                self._state["pending_end_after_tts"] = True
             return normalized
 
         if questions:
             normalized = self._cleanup(questions[-1])
             if booking_active and self._is_generic_fallback_reply(normalized):
                 return self._next_booking_question(booking_state)
+            if _assistant_is_final_handoff(normalized):
+                self._state["pending_end_after_tts"] = True
             return normalized
 
         normalized = self._cleanup(" ".join(sentences[:2]))
         if booking_active and self._is_generic_fallback_reply(normalized):
             return self._next_booking_question(booking_state)
+        if _assistant_is_final_handoff(normalized):
+            self._state["pending_end_after_tts"] = True
         return normalized
 
     async def process_frame(self, frame, direction: FrameDirection):
@@ -819,6 +907,25 @@ class BackendPersistenceProcessor(FrameProcessor):
                 )
 
         await self.push_frame(frame, direction)
+
+
+class CallWrapUpProcessor(FrameProcessor):
+    def __init__(self, state: dict):
+        super().__init__()
+        self._state = state
+
+    async def process_frame(self, frame, direction: FrameDirection):
+        await super().process_frame(frame, direction)
+        await self.push_frame(frame, direction)
+
+        if (
+            isinstance(frame, TTSStoppedFrame)
+            and self._state.get("pending_end_after_tts")
+            and not self._state.get("end_frame_sent")
+        ):
+            self._state["end_frame_sent"] = True
+            logger.info("📴 Ending call after final assistant response")
+            await self.push_frame(EndFrame(), direction)
 
 
 # ---------------------------------------------------------------------------
@@ -1156,6 +1263,8 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
             "last_assistant_text": "",
             "transcript_entries": [],
             "last_saved_caller_signature": None,
+            "pending_end_after_tts": False,
+            "end_frame_sent": False,
             "completion_reported": False,
             "booking_state": {
                 "intent": None,
@@ -1177,6 +1286,7 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
         context_sanitizer = ContextSanitizer(max_history_messages=8)
         assistant_response_normalizer = AssistantResponseNormalizer(latency_state, agent_type)
         backend_persistence = BackendPersistenceProcessor(session_id, call_id, latency_state)
+        call_wrap_up = CallWrapUpProcessor(latency_state)
 
         # ----------------------------------------------------------------
         # Pipeline (no SentenceAggregator — TTS handles text aggregation)
@@ -1193,6 +1303,7 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
             backend_persistence,
             tts,
             tts_latency_tracker,
+            call_wrap_up,
             transport.output(),
             assistant_aggregator,
         ])

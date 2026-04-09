@@ -17,6 +17,7 @@ export const createAgentConfigSchema = z.object({
   sttProvider: providerEnum.stt.default('DEEPGRAM'),
   ttsProvider: providerEnum.tts.default('CARTESIA'),
   llmProvider: providerEnum.llm.default('GROQ'),
+  llmModel: z.string().default('llama-3.1-8b-instant'),
   telephonyProvider: providerEnum.telephony.default('EXOTEL'),
 
   // API Keys (optional - can use global keys)

@@ -171,9 +171,12 @@ export class TwilioWebhookController {
       }
 
       const statusMap: Record<string, string> = {
+        initiated: 'CONNECTING',
         queued: 'RINGING',
         ringing: 'RINGING',
+        answered: 'IN_PROGRESS',
         in_progress: 'IN_PROGRESS',
+        'in-progress': 'IN_PROGRESS',
         completed: 'COMPLETED',
         busy: 'FAILED',
         failed: 'FAILED',

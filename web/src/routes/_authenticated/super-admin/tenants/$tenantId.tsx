@@ -279,6 +279,7 @@ function SuperAdminAgentSetup({
     sttProvider: string
     ttsProvider: string
     llmProvider: string
+    llmModel?: string | null
     telephonyProvider: string
     maxCallDuration: number
     enableMemory: boolean
@@ -294,6 +295,7 @@ function SuperAdminAgentSetup({
     sttProvider: string
     ttsProvider: string
     llmProvider: string
+    llmModel: string
     telephonyProvider: string
     maxCallDuration: number
     enableMemory: boolean
@@ -306,8 +308,9 @@ function SuperAdminAgentSetup({
   const [fallbackMessage, setFallbackMessage] = useState(config.fallbackMessage ?? '')
   const [language, setLanguage] = useState(config.language ?? 'en-IN')
   const [sttProvider, setSttProvider] = useState(config.sttProvider ?? 'DEEPGRAM')
-  const [ttsProvider, setTtsProvider] = useState(config.ttsProvider ?? 'ELEVEN_LABS')
-  const [llmProvider, setLlmProvider] = useState(config.llmProvider ?? 'OPENAI')
+  const [ttsProvider, setTtsProvider] = useState(config.ttsProvider ?? 'CARTESIA')
+  const [llmProvider, setLlmProvider] = useState(config.llmProvider ?? 'GROQ')
+  const [llmModel, setLlmModel] = useState(config.llmModel ?? 'llama-3.1-8b-instant')
   const [telephonyProvider, setTelephonyProvider] = useState(
     config.telephonyProvider ?? 'EXOTEL',
   )
@@ -386,7 +389,7 @@ function SuperAdminAgentSetup({
           label='TTS provider'
           value={ttsProvider}
           onChange={setTtsProvider}
-          options={['ELEVEN_LABS', 'SARVAM', 'GOOGLE']}
+          options={['CARTESIA', 'ELEVEN_LABS', 'SARVAM', 'AZURE', 'GOOGLE']}
         />
         <ProviderSelect
           label='LLM provider'
@@ -394,6 +397,10 @@ function SuperAdminAgentSetup({
           onChange={setLlmProvider}
           options={['OPENAI', 'GROQ']}
         />
+        <div className='space-y-2'>
+          <Label>LLM model</Label>
+          <Input value={llmModel} onChange={(event) => setLlmModel(event.target.value)} />
+        </div>
         <ProviderSelect
           label='Telephony provider'
           value={telephonyProvider}
@@ -413,6 +420,7 @@ function SuperAdminAgentSetup({
             sttProvider,
             ttsProvider,
             llmProvider,
+            llmModel,
             telephonyProvider,
             maxCallDuration,
             enableMemory,
