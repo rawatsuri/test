@@ -237,6 +237,28 @@ export class CallService {
         return { success: false, error: 'AI Agent Configuration not found for this tenant' };
       }
 
+      if (phoneNumber.provider === 'TWILIO') {
+        try {
+          const callSid = await this.createTwilioOutboundCall(phoneNumber.number, toNumber);
+          const call = await this.prisma.call.create({
+            data: {
+              externalId: callSid,
+              tenantId,
+              phoneNumberId,
+              callerId: caller.id,
+              direction: 'OUTBOUND',
+              status: 'RINGING',
+              provider: phoneNumber.provider,
+            },
+          });
+
+          return { success: true, call };
+        } catch (twilioError) {
+          console.error('❌ Failed to start outbound Twilio call:', twilioError);
+          return { success: false, error: 'Failed to start outbound Twilio call' };
+        }
+      }
+
       // 4. Create local call record (Pending status until Python confirms)
       const externalId = `outbound-${Date.now()}`;
       const call = await this.prisma.call.create({

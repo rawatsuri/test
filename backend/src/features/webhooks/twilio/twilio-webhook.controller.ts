@@ -37,6 +37,9 @@ export class TwilioWebhookController {
       let tenantId: string;
       let callId: string;
       let callerId: string;
+      const isOutbound = Direction === 'outbound-api';
+      const tenantPhoneNumber = isOutbound ? From : To;
+      const callerPhoneNumber = isOutbound ? To : From;
 
       if (existingCall) {
         tenantId = existingCall.tenantId;
@@ -44,7 +47,7 @@ export class TwilioWebhookController {
         callerId = existingCall.callerId;
       } else {
         const phoneNumber = await this.prisma.phoneNumber.findUnique({
-          where: { number: To },
+          where: { number: tenantPhoneNumber },
           include: { tenant: true },
         });
 
@@ -57,12 +60,12 @@ export class TwilioWebhookController {
         }
 
         tenantId = phoneNumber.tenantId;
-        let caller = await this.callerRepository.findByPhoneNumber(From, tenantId);
+        let caller = await this.callerRepository.findByPhoneNumber(callerPhoneNumber, tenantId);
 
         if (!caller) {
           caller = await this.callerRepository.create({
             tenantId,
-            phoneNumber: From,
+            phoneNumber: callerPhoneNumber,
             expiresAt: this.calculateExpiryDate(phoneNumber.tenant.dataRetentionDays),
           });
         } else {
