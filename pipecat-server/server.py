@@ -25,7 +25,9 @@ load_dotenv(override=True)
 from pipecat.audio.vad.silero import SileroVADAnalyzer
 from pipecat.audio.vad.vad_analyzer import VADParams
 from pipecat.frames.frames import (
+    BotStoppedSpeakingFrame,
     EndFrame,
+    EndTaskFrame,
     LLMContextFrame,
     LLMFullResponseEndFrame,
     LLMFullResponseStartFrame,
@@ -519,10 +521,11 @@ class ContextSanitizer(FrameProcessor):
 
 
 class AssistantResponseNormalizer(FrameProcessor):
-    def __init__(self, state: dict, agent_type: str):
+    def __init__(self, state: dict, agent_type: str, language: str):
         super().__init__()
         self._state = state
         self._agent_type = agent_type
+        self._language = (language or "en-IN").lower()
         self._buffer = []
         self._in_response = False
 
@@ -536,19 +539,46 @@ class AssistantResponseNormalizer(FrameProcessor):
         parts = re.split(r"(?<=[?.!।])\s*", text)
         return [part.strip() for part in parts if part.strip()]
 
-    def _build_capability_reply(self) -> str:
+    def _prefers_hindi(self) -> bool:
+        return "hi" in self._language
+
+    def _capability_reply_en(self) -> str:
+        if self._agent_type == "hotel":
+            return "I can help with hotel bookings. Tell me what you need."
+        if self._agent_type == "doctor":
+            return "I can help with appointment scheduling. Tell me what you need."
+        return "I can help with this call. What do you need?"
+
+    def _capability_reply_hi(self) -> str:
         if self._agent_type == "hotel":
             return "मैं होटल बुकिंग में मदद कर सकती हूँ, बताइए आपको क्या चाहिए?"
         if self._agent_type == "doctor":
             return "मैं डॉक्टर अपॉइंटमेंट बुकिंग में मदद कर सकती हूँ, बताइए आपको क्या चाहिए?"
         return "मैं आपकी मदद कर सकती हूँ, बताइए आपको क्या चाहिए?"
 
-    def _build_scope_boundary_reply(self) -> str:
+    def _build_capability_reply(self) -> str:
+        if self._prefers_hindi():
+            return self._capability_reply_hi()
+        return self._capability_reply_en()
+
+    def _scope_boundary_reply_en(self) -> str:
+        if self._agent_type == "hotel":
+            return "I can only help with hotel booking on this call. If you need a hotel, tell me the city."
+        if self._agent_type == "doctor":
+            return "I can only help with appointment scheduling on this call. Tell me what you need."
+        return "I can only help with this call. Tell me what you need."
+
+    def _scope_boundary_reply_hi(self) -> str:
         if self._agent_type == "hotel":
             return "अभी मैं सिर्फ होटल बुकिंग में मदद कर सकती हूँ, अगर होटल चाहिए तो शहर बताइए।"
         if self._agent_type == "doctor":
             return "अभी मैं सिर्फ डॉक्टर अपॉइंटमेंट बुकिंग में मदद कर सकती हूँ, अगर appointment चाहिए तो बताइए।"
         return "अभी मैं इसी कॉल से जुड़ी मदद कर सकती हूँ, बताइए आपको क्या चाहिए।"
+
+    def _build_scope_boundary_reply(self) -> str:
+        if self._prefers_hindi():
+            return self._scope_boundary_reply_hi()
+        return self._scope_boundary_reply_en()
 
     def _looks_like_acknowledgement_only(self, text: str) -> bool:
         normalized = re.sub(r"[^a-zA-Z\u0900-\u097F\s]", " ", text.lower())
@@ -670,7 +700,9 @@ class AssistantResponseNormalizer(FrameProcessor):
         return ""
 
     def _build_goodbye_reply(self) -> str:
-        return "ठीक है, धन्यवाद. अगर ज़रूरत हुई तो हमारी टीम आपसे संपर्क करेगी. नमस्कार।"
+        if self._prefers_hindi():
+            return "ठीक है, धन्यवाद. अगर ज़रूरत हुई तो हमारी टीम आपसे संपर्क करेगी. नमस्कार।"
+        return "Alright, thank you. Our team will reach out if needed. Goodbye."
 
     def _normalize_response(self, text: str) -> str:
         text = self._cleanup(text)
@@ -723,7 +755,7 @@ class AssistantResponseNormalizer(FrameProcessor):
                 return self._build_scope_boundary_reply()
             return capability_reply
         if sounds_fragmented and not booking_active:
-            return "जी, बताइए आपको क्या चाहिए?"
+            return self._build_capability_reply()
 
         sentences = []
         seen = set()
@@ -919,13 +951,14 @@ class CallWrapUpProcessor(FrameProcessor):
         await self.push_frame(frame, direction)
 
         if (
-            isinstance(frame, TTSStoppedFrame)
+            isinstance(frame, (TTSStoppedFrame, BotStoppedSpeakingFrame))
             and self._state.get("pending_end_after_tts")
             and not self._state.get("end_frame_sent")
         ):
             self._state["end_frame_sent"] = True
             logger.info("📴 Ending call after final assistant response")
-            await self.push_frame(EndFrame(), direction)
+            await self.push_frame(EndTaskFrame(reason="assistant_wrap_up"), FrameDirection.UPSTREAM)
+            await self.push_frame(EndFrame(), FrameDirection.DOWNSTREAM)
 
 
 # ---------------------------------------------------------------------------
@@ -986,7 +1019,7 @@ class ConversationConfig(BaseModel):
     tts_provider: str = "cartesia"
     stt_provider: str = "deepgram"
     llm_provider: str = "groq"
-    llm_model: Optional[str] = "llama-3.3-70b-versatile"
+    llm_model: Optional[str] = "llama-3.1-8b-instant"
     tts_api_key: Optional[str] = None
     stt_api_key: Optional[str] = None
     llm_api_key: Optional[str] = None
@@ -1212,7 +1245,7 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
             from pipecat.services.groq.llm import GroqLLMService
             llm = GroqLLMService(
                 api_key=config.get("llm_api_key") or os.getenv("GROQ_API_KEY"),
-                model=llm_model or "llama-3.3-70b-versatile",
+                model=llm_model or "llama-3.1-8b-instant",
             )
         elif llm_name == "openai":
             from pipecat.services.openai import OpenAILLMService
@@ -1284,7 +1317,7 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
         llm_latency_tracker = StageLatencyTracker(session_id, "llm", latency_state)
         tts_latency_tracker = StageLatencyTracker(session_id, "tts", latency_state)
         context_sanitizer = ContextSanitizer(max_history_messages=8)
-        assistant_response_normalizer = AssistantResponseNormalizer(latency_state, agent_type)
+        assistant_response_normalizer = AssistantResponseNormalizer(latency_state, agent_type, raw_language)
         backend_persistence = BackendPersistenceProcessor(session_id, call_id, latency_state)
         call_wrap_up = CallWrapUpProcessor(latency_state)
 
