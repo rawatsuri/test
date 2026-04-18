@@ -3,6 +3,7 @@ import axios from 'axios';
 
 import { env } from '../../../config/env-config';
 import { PrismaService } from '../../../config/prisma.config';
+import { contextService } from '../../../services/context.service';
 import { CreateCallInput, UpdateCallInput } from '../schemas/call.schema';
 
 export class CallService {
@@ -284,16 +285,35 @@ export class CallService {
 
       // 5. Trigger outbound call via the configured voice bridge endpoint
       try {
-        await axios.post(env.PIPECAT_OUTBOUND_CALL_URL, {
+        const contextResult = await contextService.buildCallContext(tenantId, caller.id);
+        const bridgePayload: any = {
           to_phone: toNumber,
           from_phone: phoneNumber.number,
-          system_prompt: agentConfig.systemPrompt || 'You are a helpful assistant.',
           greeting: agentConfig.greeting || 'Hello!',
           llm_provider: agentConfig.llmProvider || 'GROQ',
           llm_model: agentConfig.llmModel || 'llama-3.1-8b-instant',
           tts_provider: agentConfig.ttsProvider || 'CARTESIA',
           stt_provider: agentConfig.sttProvider || 'DEEPGRAM',
-        });
+        };
+
+        if (contextResult.success && contextResult.context) {
+          let enrichedSystemPrompt = contextResult.context.systemPrompt;
+          if (contextResult.context.enableMemory) {
+             const memoryPrompt = contextService.formatContextForLLM(contextResult.context.callerContext);
+             if (memoryPrompt) {
+               enrichedSystemPrompt += `\n\n## CALLER CONTEXT\n${memoryPrompt}`;
+             }
+          }
+          bridgePayload.system_prompt = enrichedSystemPrompt;
+          bridgePayload.context = {
+            caller_context: contextResult.context.callerContext,
+            max_call_duration: contextResult.context.maxCallDuration
+          };
+        } else {
+          bridgePayload.system_prompt = agentConfig.systemPrompt || 'You are a helpful assistant.';
+        }
+
+        await axios.post(env.PIPECAT_OUTBOUND_CALL_URL, bridgePayload);
 
         // Update status to ringing since bridge accepted it
         await this.updateStatus(call.id, 'RINGING');

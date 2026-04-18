@@ -2,6 +2,7 @@ import { PrismaService } from '../config/prisma.config';
 import { AgentConfigRepository } from '../features/agent-config/repositories/agent-config.repository';
 import { CallerRepository } from '../features/callers/repositories/caller.repository';
 import { CallRepository } from '../features/calls/repositories/call.repository';
+import { KnowledgeService } from '../features/knowledge/services/knowledge.service';
 
 export interface CallerContext {
   callerId: string;
@@ -45,6 +46,7 @@ export class ContextService {
   private callerRepository = new CallerRepository(this.prisma);
   private callRepository = new CallRepository(this.prisma);
   private agentConfigRepository = new AgentConfigRepository(this.prisma);
+  private knowledgeService = new KnowledgeService();
 
   /**
    * Build complete context for a call
@@ -119,9 +121,16 @@ export class ContextService {
       // Decrypt API keys
       const decryptedKeys = this.agentConfigRepository.decryptApiKeys(agentConfig.providerApiKeys);
 
+      // Append Knowledge base if available
+      let systemPrompt = agentConfig.systemPrompt;
+      const knowledgeResult = await this.knowledgeService.getContextForPipecat(tenantId);
+      if (knowledgeResult.success && knowledgeResult.context) {
+        systemPrompt += `\n\n## KNOWLEDGE BASE\n${knowledgeResult.context}`;
+      }
+
       // Build complete Pipecat context
       const pipecatContext: PipecatContext = {
-        systemPrompt: agentConfig.systemPrompt,
+        systemPrompt,
         callerContext,
         sttProvider: agentConfig.sttProvider,
         ttsProvider: agentConfig.ttsProvider,
